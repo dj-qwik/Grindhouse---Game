@@ -153,7 +153,8 @@ function matFor(p, look, idx) {
   if (p.mat === 'concrete' && look && look.ground) col = look.ground;
   // per-surface variation so big concrete areas don't read as one flat colour
   if (['concrete', 'wall', 'stairs', 'brick', 'wood', 'plank', 'roof', 'asphalt'].includes(p.mat)) { const v = idx % 3; col = '#' + new THREE.Color(col).offsetHSL(v === 1 ? 0.012 : v === 2 ? -0.01 : 0, v === 2 ? 0.05 : 0, v === 1 ? -0.035 : v === 2 ? 0.03 : 0).getHexString(); }
-  const tk = TEX_OF[p.mat], opts = { vertexColors: true, aoMap: GFX.macro, aoMapIntensity: 0.75 };
+  // DoubleSide: every face of a block draws whichever way it was wound (no see-through walls)
+  const tk = TEX_OF[p.mat], opts = { vertexColors: true, aoMap: GFX.macro, aoMapIntensity: 0.75, side: THREE.DoubleSide };
   if (tk) { opts.map = GFX.tex[tk]; if (GFX.nrm[tk]) { opts.normalMap = GFX.nrm[tk]; opts.normalScale = new THREE.Vector2(0.9, 0.9); } }
   if (p.mat === 'glass') { opts.transparent = true; opts.opacity = 0.35; }
   if (p.mat === 'fence') { opts.transparent = true; opts.alphaTest = 0.4; opts.side = THREE.DoubleSide; }
@@ -346,7 +347,7 @@ function syncArena(R, t, dt) {
     const w = p.warn || 0;
     if (w > 0) {
       const on = Math.floor(GFX.clock * (6 + w * 6)) % 2 === 0;
-      if (on) { e.m.material = WARN_MAT[p.mat] || (WARN_MAT[p.mat] = toon('#FF5C69', { emissive: new THREE.Color('#551018') })); } else e.m.material = e.baseMat;
+      if (on) { e.m.material = WARN_MAT[p.mat] || (WARN_MAT[p.mat] = toon('#FF5C69', { emissive: new THREE.Color('#551018'), side: THREE.DoubleSide })); } else e.m.material = e.baseMat;
     } else if (e.m.material !== e.baseMat) e.m.material = e.baseMat;
   }
   for (const e of B.rails) {
