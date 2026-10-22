@@ -2,7 +2,7 @@
 // Eight looks (bible §11), one shared rig: capsule limbs placed by two-bone IK every frame from the simulation state,
 // so pushes, crouches, flips, grinds, wallrides, swings, aims and wipeouts all read at a glance. Outlines carry the
 // silhouette at gameplay distance; colour blocking and head shape tell skaters apart.
-const RIG = { l1: 0.46, l2: 0.46, a1: 0.3, a2: 0.28 };
+const RIG = { l1: 0.46, l2: 0.46, a1: 0.29, a2: 0.27 };
 const V3 = () => new THREE.Vector3();
 const _v = [V3(), V3(), V3(), V3(), V3(), V3()], _up = new THREE.Vector3(0, 1, 0), _q = new THREE.Quaternion();
 function limbBetween(mesh, a, b) {
@@ -21,6 +21,16 @@ function ik(A, E, l1, l2, bend, K) {
   K.copy(A).addScaledVector(dir, l1 * ca).addScaledVector(perp, l1 * sa);
 }
 function capsuleUnit(r) { const g = new THREE.CylinderGeometry(r, r * 0.9, 1, 8, 1); return g; }
+// a unit-length limb tapering from radius rA at its root (a) to rB at its end (b) — see limbBetween()
+function limbGeo(rA, rB) { return new THREE.CylinderGeometry(rB, rA, 1, 12, 1); }
+// torso: a lathed vase (waist → ribcage → shoulders), flattened front-to-back; origin mid-torso
+let TORSO_GEO = null;
+function torsoGeo() {
+  if (TORSO_GEO) return TORSO_GEO;
+  const T = THREE, pts = [[0.001, -0.33], [0.13, -0.32], [0.145, -0.24], [0.14, -0.12], [0.15, -0.02], [0.175, 0.08], [0.2, 0.17], [0.205, 0.24], [0.18, 0.3], [0.12, 0.345], [0.04, 0.36], [0.001, 0.362]].map(([r, y]) => new T.Vector2(r, y));
+  const g = new T.LatheGeometry(pts, 20); g.scale(0.68, 1, 1); g.computeVertexNormals();
+  return (TORSO_GEO = g);
+}
 
 function makeSkaterRig(look) {
   const T = THREE, L = SKATERS[look % SKATERS.length], root = new T.Group();
@@ -38,23 +48,36 @@ function makeSkaterRig(look) {
   }
   // body parts (unit-length limbs scaled each frame)
   const mk = (geo, mat, w) => { const m = ol(new T.Mesh(geo, mat), w); root.add(m); return m; };
-  const thighL = mk(capsuleUnit(0.085), L.style.includes('overalls') ? body : trim), thighR = mk(capsuleUnit(0.085), L.style.includes('overalls') ? body : trim);
-  const shinL = mk(capsuleUnit(0.07), trim), shinR = mk(capsuleUnit(0.07), trim);
-  const footL = mk(new T.BoxGeometry(0.12, 0.08, 0.27), shoe, 0.02), footR = mk(new T.BoxGeometry(0.12, 0.08, 0.27), shoe, 0.02);
-  const torso = mk(new T.CapsuleGeometry(0.19, 0.36, 4, 10), body, 0.03);
+  const legM = L.style.includes('overalls') ? body : trim;
+  const thighL = mk(limbGeo(0.092, 0.07), legM), thighR = mk(limbGeo(0.092, 0.07), legM);
+  const shinL = mk(limbGeo(0.068, 0.052), trim), shinR = mk(limbGeo(0.068, 0.052), trim);
+  const kneeL = mk(new T.SphereGeometry(0.072, 10, 8), legM, 0.015), kneeR = mk(new T.SphereGeometry(0.072, 10, 8), legM, 0.015);
+  const footL = mk(new T.BoxGeometry(0.115, 0.085, 0.28), shoe, 0.02), footR = mk(new T.BoxGeometry(0.115, 0.085, 0.28), shoe, 0.02);
+  const pelvis = mk(new T.SphereGeometry(0.16, 14, 10), legM, 0.02); pelvis.scale.set(0.78, 0.62, 1.05);
+  const torso = mk(torsoGeo(), body, 0.03);
   const pads = L.style.includes('stunt') || L.style.includes('leathers');
-  const uaL = mk(capsuleUnit(0.06), body), uaR = mk(capsuleUnit(0.06), body), faL = mk(capsuleUnit(0.05), pads ? trim : skin), faR = mk(capsuleUnit(0.05), pads ? trim : skin);
-  const handL = mk(new T.SphereGeometry(0.06, 8, 6), L.style.includes('courier') ? dark : skin, 0.015), handR = mk(new T.SphereGeometry(0.06, 8, 6), L.style.includes('courier') ? dark : skin, 0.015);
+  const uaL = mk(limbGeo(0.062, 0.05), body), uaR = mk(limbGeo(0.062, 0.05), body);
+  const faL = mk(limbGeo(0.05, 0.04), pads ? trim : skin), faR = mk(limbGeo(0.05, 0.04), pads ? trim : skin);
+  const shoL = mk(new T.SphereGeometry(0.07, 10, 8), body, 0.02), shoR = mk(new T.SphereGeometry(0.07, 10, 8), body, 0.02);
+  const elbL = mk(new T.SphereGeometry(0.05, 8, 6), body, 0.012), elbR = mk(new T.SphereGeometry(0.05, 8, 6), body, 0.012);
+  const handM = L.style.includes('courier') ? dark : skin;
+  const handL = mk(new T.SphereGeometry(0.055, 10, 8), handM, 0.015), handR = mk(new T.SphereGeometry(0.055, 10, 8), handM, 0.015);
+  handL.scale.set(0.8, 1.15, 0.7); handR.scale.set(0.8, 1.15, 0.7);
+  const neck = mk(new T.CylinderGeometry(0.048, 0.056, 0.14, 10), skin, 0.015);
   const head = new T.Group(); root.add(head);
-  const skull = ol(new T.Mesh(L.hair === 'helmet' ? new T.SphereGeometry(0.16, 14, 10) : new T.BoxGeometry(0.26, 0.28, 0.25), skin), 0.025); head.add(skull);
-  // face: two eyes + a mouth line (expressions read in close-ups)
-  const eyeM = toon('#22292B');
-  const eyes = [-0.06, 0.06].map((z) => { const e = new T.Mesh(new T.BoxGeometry(0.02, 0.05, 0.035), eyeM); e.position.set(0.13, 0.02, z); head.add(e); return e; });
-  const mouth = new T.Mesh(new T.BoxGeometry(0.02, 0.02, 0.09), eyeM); mouth.position.set(0.13, -0.07, 0); head.add(mouth);
+  const skull = ol(new T.Mesh(new T.SphereGeometry(0.14, 20, 16), skin), 0.025); skull.scale.set(0.95, 1.08, 0.88); skull.position.y = 0.03; head.add(skull);
+  const jaw = ol(new T.Mesh(new T.SphereGeometry(0.1, 14, 10), skin), 0.02); jaw.scale.set(0.95, 0.7, 0.86); jaw.position.set(0.03, -0.065, 0); head.add(jaw);
+  for (const z of [-0.122, 0.122]) { const ear = ol(new T.Mesh(new T.SphereGeometry(0.034, 8, 6), skin), 0.012); ear.scale.set(0.55, 1, 0.4); ear.position.set(-0.005, 0.0, z); head.add(ear); }
+  // face: eyes (white + pupil, squint by scaling the pair), brows, nose, mouth — expressions read in close-ups
+  const eyeM = toon('#22292B'), whiteM = toon('#F7F3EA');
+  const eyes = [-0.047, 0.047].map((z) => { const e = new T.Group(); e.position.set(0.118, 0.028, z); head.add(e);
+    const w = new T.Mesh(new T.SphereGeometry(0.03, 10, 8), whiteM); w.scale.set(0.45, 1, 0.85); e.add(w);
+    const pu = new T.Mesh(new T.SphereGeometry(0.016, 8, 6), eyeM); pu.position.set(0.012, -0.002, z > 0 ? -0.003 : 0.003); e.add(pu); return e; });
+  const mouth = new T.Mesh(new T.BoxGeometry(0.014, 0.014, 0.058), toon('#6B2B2B')); mouth.position.set(0.122, -0.078, 0); head.add(mouth);
   addHair(head, L, ol);
   // brows + nose: expressions read in close-ups
-  const brows = [-0.065, 0.065].map((z) => { const b = new T.Mesh(new T.BoxGeometry(0.02, 0.018, 0.06), eyeM); b.position.set(0.135, 0.065, z); head.add(b); return b; });
-  const nose = new T.Mesh(new T.BoxGeometry(0.05, 0.05, 0.04), skin); nose.position.set(0.145, -0.02, 0); head.add(nose);
+  const brows = [-0.05, 0.05].map((z) => { const b = new T.Mesh(new T.BoxGeometry(0.016, 0.016, 0.056), eyeM); b.position.set(0.126, 0.072, z); head.add(b); return b; });
+  const nose = ol(new T.Mesh(new T.SphereGeometry(0.026, 8, 6), skin), 0.01); nose.scale.set(1.1, 1.2, 0.8); nose.position.set(0.135, -0.018, 0); head.add(nose);
   // knee pads for the stunt rider / racer / courier, a backpack for the courier
   const kneePads = [];
   if (/stunt|leathers|courier/.test(L.style)) for (let k = 0; k < 2; k++) { const pd = ol(new T.Mesh(new T.SphereGeometry(0.085, 8, 6), toon('#22292B')), 0.015); pd.scale.set(1, 1.2, 1); root.add(pd); kneePads.push(pd); }
@@ -66,7 +89,7 @@ function makeSkaterRig(look) {
   const bunch = [0, 1].map(() => { const b = ol(new T.Mesh(new T.TorusGeometry(0.085, 0.045, 6, 12), trim), 0.015); b.visible = false; root.add(b); return b; });
   // weapon slot in the right hand
   const hold = new T.Group(); root.add(hold);
-  const r = { root, board, deck, parts: { thighL, thighR, shinL, shinR, footL, footR, torso, uaL, uaR, faL, faR, handL, handR }, head, hold, eyes, mouth, look, brows, pads: kneePads, pack, butt, bunch, skinM: skin, legM: L.style.includes('overalls') ? body : trim,
+  const r = { root, board, deck, parts: { thighL, thighR, shinL, shinR, footL, footR, torso, uaL, uaR, faL, faR, handL, handR, kneeL, kneeR, pelvis, shoL, shoR, elbL, elbR, neck }, head, hold, eyes, mouth, look, brows, pads: kneePads, pack, butt, bunch, skinM: skin, legM,
     weapon: null, weaponId: null, phase: Math.random() * 6, crouch: 0, land: 0, lean: 0, lastYaw: 0, flip: 0, recoil: 0, swing: 0, throwT: 0, hitT: 0, lastHp: 100, lastAmmo: 0, tumble: 0, boardOff: null, alive: true, shade: 1 };
   return r;
 }
@@ -81,7 +104,7 @@ function addHair(head, L, ol) {
     case 'flat': add(new T.BoxGeometry(0.27, 0.06, 0.26), dark, 0, 0.16, 0); break;
     case 'bandana': add(new T.BoxGeometry(0.27, 0.08, 0.26), toon(L.trim), 0, 0.13, 0); add(new T.BoxGeometry(0.06, 0.04, 0.12), toon(L.trim), -0.16, 0.08, 0, 0, 0.6); break;
     case 'helmet': add(new T.SphereGeometry(0.19, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), toon(L.body), 0, 0.02, 0); add(new T.BoxGeometry(0.04, 0.09, 0.3), toon('#36DCE8', { transparent: true, opacity: 0.7 }), 0.16, 0.02, 0); add(new T.BoxGeometry(0.3, 0.03, 0.04), toon(L.trim), 0, 0.18, 0); break;
-    case 'hood': add(new T.SphereGeometry(0.18, 14, 10, Math.PI * 0.6, Math.PI * 1.8), toon(L.body), -0.02, 0.03, 0); break;
+    case 'hood': { const h = add(new T.SphereGeometry(0.18, 16, 12, Math.PI * 1.45, Math.PI * 1.1), toon(L.body), -0.02, 0.03, 0); h.material = h.material.clone(); h.material.side = T.DoubleSide; break; } // open at the face (+x)
   }
 }
 
@@ -136,7 +159,7 @@ function poseRig(r, s, dt, view) {
   r.hitT = Math.max(0, r.hitT - dt); r.recoil = Math.max(0, r.recoil - dt * 7);
   if (r.wasAir && !air && s.mode === MODE.GROUND) r.land = 1; r.wasAir = air;
   r.land = Math.max(0, r.land - dt * 4);
-  const target = s.charge >= 0 ? 0.35 + Math.min(1, s.charge / 0.45) * 0.45 : air ? 0.45 : s.mode === MODE.GRIND ? 0.45 : r.land * 0.6 + Math.min(0.25, sp * 0.015);
+  const target = s.charge >= 0 ? 0.35 + Math.min(1, s.charge / 0.45) * 0.45 : air ? 0.45 : s.mode === MODE.GRIND ? 0.45 : r.land * 0.6 + Math.min(0.25, sp * 0.015) + 0.1;
   r.crouch += (target - r.crouch) * Math.min(1, dt * 14);
   r.lean += (Math.max(-0.35, Math.min(0.35, -yawRate * 0.06 * Math.min(1, sp / 6))) - r.lean) * Math.min(1, dt * 8);
   // board transform: tricks, manual, wallride, tumble
@@ -189,17 +212,17 @@ function poseRig(r, s, dt, view) {
   // torso + head: twist toward the aim (bible §11: independent upper-body aiming)
   const twist = dw > 0 ? 0 : Math.max(-1.5, Math.min(1.5, angWrap(view.aimYaw - (yaw + Math.PI / 2))));
   const chest = V3().copy(hip).add(V3().set(0.06 + r.lean * 0.5 + (s.manual > 0 ? -0.15 : 0) + 0.24 * sq, 0.52 - c * 0.08 - 0.07 * sq, 0));
-  P.torso.position.copy(hip).lerp(chest, 0.5).add(V3().set(0, 0.04, 0)); P.torso.rotation.set(0, twist * 0.6, -0.12 - c * 0.3 + r.lean * 0.6 - (r.hitT > 0 ? 0.3 : 0) - 0.45 * sq);
-  r.head.position.copy(chest).add(V3().set(0.02, 0.27, 0)); r.head.rotation.set(0, twist * 0.95 + Math.PI / 2 - Math.PI / 2, -view.aimPitch * 0.5);
+  P.torso.position.copy(hip).lerp(chest, 0.5).add(V3().set(0, 0.1, 0)); P.torso.rotation.set(0, twist * 0.6, -0.12 - c * 0.3 + r.lean * 0.6 - (r.hitT > 0 ? 0.3 : 0) - 0.45 * sq);
+  r.head.position.copy(chest).add(V3().set(0.025, 0.31, 0)); r.head.rotation.set(0, twist * 0.95 + Math.PI / 2 - Math.PI / 2, -view.aimPitch * 0.5);
   r.head.rotation.y = twist; // face local +x then twist
   // expression: squint when hit or charged, wide when airborne
   const eyeSq = r.hitT > 0 ? 0.3 : s.adren >= 100 ? 0.5 : 1; r.eyes.forEach((e) => { e.scale.y = eyeSq; }); r.mouth.scale.z = air ? 0.6 : 1; r.mouth.scale.y = r.hitT > 0 || air ? 2.5 : 1;
   // arms + weapon
   const aimDir = V3().set(Math.sin(view.aimYaw - yaw) * Math.cos(view.aimPitch), Math.sin(view.aimPitch), Math.cos(view.aimYaw - yaw) * Math.cos(view.aimPitch));
-  const sh = V3().copy(chest).add(V3().set(0, 0.16, 0));
+  const sh = V3().copy(chest).add(V3().set(-0.01, 0.15, 0));
   const tw = V3().set(Math.cos(twist), 0, -Math.sin(twist)); // body's facing in root space after twist
   const side = V3().set(Math.sin(twist), 0, Math.cos(twist));
-  const shL = V3().copy(sh).addScaledVector(side, 0.2), shR = V3().copy(sh).addScaledVector(side, -0.2);
+  const shL = V3().copy(sh).addScaledVector(side, 0.205), shR = V3().copy(sh).addScaledVector(side, -0.205);
   let hR, hL;
   const wid = s.alive && !s.plant && !(ROUND && ROUND.free) ? (s.slot === 1 && s.ranged ? s.ranged : s.melee || 'bat') : null;
   const ranged = wid && AIM_IDS[wid];
@@ -214,10 +237,10 @@ function poseRig(r, s, dt, view) {
     hR = V3().copy(sh).addScaledVector(dir, 0.5).add(V3().set(0, 0.1 - Math.abs(u) * 0.15, 0));
     hL = V3().copy(shL).add(V3().set(0.1, -0.25, 0));
   } else {
-    const idle = Math.sin(GFX.clock * 2 + r.phase) * 0.03;
-    hR = V3().copy(shR).addScaledVector(tw, 0.18).add(V3().set(0, -0.35 + idle, 0));
-    hL = V3().copy(shL).addScaledVector(tw, 0.1).add(V3().set(0, -0.4 - idle + (air ? 0.25 : 0) + (s.mode === MODE.GRIND ? 0.3 : 0), 0)).addScaledVector(side, air || s.mode === MODE.GRIND ? 0.25 : 0);
-    if (air || s.mode === MODE.GRIND) hR.addScaledVector(side, -0.25).y += 0.25;
+    // relaxed: arms hang a little away from the body, swaying; out wide for balance in the air and on rails
+    const idle = Math.sin(GFX.clock * 2 + r.phase) * 0.03, bal = air || s.mode === MODE.GRIND ? 1 : Math.min(1, sp / 14) * 0.35;
+    hR = V3().copy(shR).addScaledVector(tw, 0.06 + idle).addScaledVector(side, -0.1 - bal * 0.3).add(V3().set(0, -0.5 + bal * 0.3, 0));
+    hL = V3().copy(shL).addScaledVector(tw, 0.04 - idle).addScaledVector(side, 0.1 + bal * 0.3).add(V3().set(0, -0.5 + bal * 0.3, 0));
   }
   if (s.adren >= 100 && s.alive && !ranged && !s.atk) hR.y += 0.1;
   if (s.plant) { hL = V3().copy(shL).add(V3().set(0.05, 0.62, 0.04)); hR = V3().copy(shR).add(V3().set(0.25, -0.15, -0.1)); }
@@ -228,8 +251,16 @@ function poseRig(r, s, dt, view) {
     else { hL.lerp(wL, dw); hR.lerp(wR, dw); }
   }
   const eL = V3(), eR = V3();
-  ik(shL, hL, RIG.a1, RIG.a2, V3().set(-0.3, -1, 0), eL); ik(shR, hR, RIG.a1, RIG.a2, V3().set(-0.3, -1, 0), eR);
+  // elbows: behind and a little out when the arms hang, down when holding a gun up
+  const bendL = ranged || s.atk ? V3().set(-0.3, -1, 0.3) : V3().copy(tw).multiplyScalar(-1).addScaledVector(side, 0.45).add(V3().set(0, -0.2, 0));
+  const bendR = ranged || s.atk ? V3().set(-0.3, -1, -0.3) : V3().copy(tw).multiplyScalar(-1).addScaledVector(side, -0.45).add(V3().set(0, -0.2, 0));
+  ik(shL, hL, RIG.a1, RIG.a2, bendL, eL); ik(shR, hR, RIG.a1, RIG.a2, bendR, eR);
   limbBetween(P.uaL, shL, eL); limbBetween(P.faL, eL, hL); limbBetween(P.uaR, shR, eR); limbBetween(P.faR, eR, hR);
+  P.shoL.position.copy(shL); P.shoR.position.copy(shR); P.elbL.position.copy(eL); P.elbR.position.copy(eR);
+  P.kneeL.position.copy(kL); P.kneeR.position.copy(kR);
+  P.pelvis.position.copy(hip).add(V3().set(0, 0.02, 0)); P.pelvis.rotation.set(0, twist * 0.25, -0.05);
+  P.neck.position.copy(chest).add(V3().set(0.015, 0.2, 0)); P.neck.rotation.set(0, 0, -0.1);
+  P.handL.quaternion.setFromUnitVectors(_up, V3().subVectors(hL, eL).normalize()); P.handR.quaternion.setFromUnitVectors(_up, V3().subVectors(hR, eR).normalize());
   P.handL.position.copy(hL); P.handR.position.copy(hR);
   // weapon mesh in the right hand, pointing along the forearm (melee) or the aim (guns)
   if (wid !== r.weaponId) {
@@ -238,7 +269,7 @@ function poseRig(r, s, dt, view) {
   }
   if (r.weapon) {
     r.hold.position.copy(hR);
-    const fwd = ranged ? aimDir.clone() : V3().subVectors(hR, eR).normalize();
+    const fwd = ranged ? aimDir.clone() : s.atk ? V3().subVectors(hR, eR).normalize() : V3().copy(tw).multiplyScalar(0.55).add(V3().set(0, -1, 0)).addScaledVector(side, -0.25).normalize(); // idle: carried low and forward, clear of the arm
     r.hold.quaternion.setFromUnitVectors(V3().set(0, 0, 1), fwd);
     if (r.weapon.userData.saw) r.weapon.userData.saw.rotation.y += dt * 20;
   }
@@ -274,7 +305,7 @@ function portrait(look) {
   const rig = makeSkaterRig(look); sc.add(rig.root);
   const fake = { alive: true, hp: 100, mode: 0, vx: 0, vz: 0, vy: 0, charge: -1, my: 0, manual: 0, adren: 0, slot: 0, melee: 'bat', ranged: null, ammo: 0, trick: null, atk: null, onPrim: null, nx: 0, ny: 1, nz: 0 };
   poseRig(rig, fake, 0.016, { x: 0, y: 0, z: 0, yaw: 0.35, aimYaw: Math.PI / 2 + 0.35, aimPitch: 0 });
-  cam.position.set(1.7, 1.5, 0.35); cam.lookAt(0, 1.22, 0);
+  cam.position.set(1.5, 1.95, 0.35); cam.lookAt(0, 1.72, 0);
   const rt = new T.WebGLRenderTarget(128, 128); GFX.r.setRenderTarget(rt); GFX.r.setClearColor(new T.Color(SKATERS[look].trim), 1); GFX.r.render(sc, cam); GFX.r.setRenderTarget(null);
   const px = new Uint8Array(128 * 128 * 4); GFX.r.readRenderTargetPixels(rt, 0, 0, 128, 128, px);
   const cv = document.createElement('canvas'); cv.width = cv.height = 128; const g = cv.getContext('2d'), id = g.createImageData(128, 128);
@@ -315,4 +346,23 @@ function clothTex(look, part) {
   }
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping;
   return (CLOTH[key] = t);
+}
+
+// test hook: render all eight looks side by side in a pose ('stand' | 'push' | 'air' | 'aim') into a data URL
+function rigLineup(pose = 'stand', yawView = 0.6, w = 1400, h = 520) {
+  const T = THREE, sc = new T.Scene(), cam = new T.PerspectiveCamera(30, w / h, 0.1, 60);
+  sc.add(new T.HemisphereLight(0xffffff, 0x887766, 2.2)); const dl = new T.DirectionalLight(0xffffff, 1.8); dl.position.set(3, 5, 4); sc.add(dl);
+  for (let k = 0; k < 8; k++) {
+    const rig = makeSkaterRig(k); sc.add(rig.root);
+    const s = { alive: true, hp: 100, mode: pose === 'air' ? MODE.AIR : 0, vx: 0, vz: pose === 'push' ? 6 : 0, vy: 0, charge: -1, my: pose === 'push' ? 1 : 0, manual: 0, adren: 0, slot: pose === 'aim' ? 1 : 0, melee: 'bat', ranged: pose === 'aim' ? 'pistol' : null, ammo: 10, trick: null, atk: null, onPrim: null, nx: 0, ny: 1, nz: 0 };
+    const z = (k - 3.5) * 1.25;
+    for (let f = 0; f < 30; f++) poseRig(rig, s, 0.033, { x: 0, y: 0, z, yaw: 0, aimYaw: pose === 'aim' ? Math.PI / 2 : 0, aimPitch: 0 });
+    if (rig.blob) sc.add(rig.blob);
+  }
+  const dist = arguments[4] || 9.5, fz = arguments[5] || 0; cam.position.set(Math.sin(yawView) * dist, 1.5, fz + Math.cos(yawView) * dist); cam.lookAt(0, 1.0, fz);
+  const rt = new T.WebGLRenderTarget(w, h); GFX.r.setRenderTarget(rt); GFX.r.setClearColor(new T.Color('#3b4a52'), 1); GFX.r.render(sc, cam); GFX.r.setRenderTarget(null);
+  const px = new Uint8Array(w * h * 4); GFX.r.readRenderTargetPixels(rt, 0, 0, w, h, px);
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const g = cv.getContext('2d'), id = g.createImageData(w, h);
+  for (let y = 0; y < h; y++) id.data.set(px.subarray((h - 1 - y) * w * 4, (h - y) * w * 4), y * w * 4);
+  g.putImageData(id, 0, 0); return cv.toDataURL('image/png');
 }

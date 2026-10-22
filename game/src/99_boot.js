@@ -9,7 +9,7 @@
     goHome();
     requestAnimationFrame(frame);
     // debug/test hooks (used by tools/*.mjs browser checks)
-    window.GH = { GAME, get ROUND() { return ROUND; }, startPractice, NET, CASH, SETTINGS, INPUT, goHome, cycleSpec, startReplay, GFX, ARENAS };
+    window.GH = { GAME, get ROUND() { return ROUND; }, startPractice, NET, CASH, SETTINGS, INPUT, goHome, cycleSpec, startReplay, GFX, ARENAS, rigLineup };
   } catch (e) {
     console.error(e);
     document.body.dataset.err = 'Grindhouse could not start: ' + e.message + ' (WebGL needed)';
