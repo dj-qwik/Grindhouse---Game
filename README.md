@@ -64,11 +64,11 @@ Deliberate differences from the bible, and why:
   can replace `game/src/12_skaters.js` later without touching gameplay.
 
 ## Controls
-WASD steer/push (relative to the camera) · Shift boost push · Ctrl or C brake/powerslide · Space ollie (hold to
-charge) · Q + direction trick (Q + S on the ground = manual) · Left mouse attack/fire · Right mouse aim / charge
-melee (+ attack at 100 Adrenaline = Signature Slam) · E pick up · R / wheel / 1–2 swap · F shove/throw.
-Controller: left stick, right stick, RT push/boost, LT brake, A ollie, X trick, RB attack, LB aim, Y pick up,
-B throw, D-pad swap. Everything is remappable in Settings.
+Five things: **WASD** steer and push (**S** brakes) · **Space** ollie (hold to pop higher) · **Left click** attack
+(auto-targets whoever is in front; uses your gun, or your melee weapon up close) · **Right click** trick in the air,
+or Signature Slam when Adrenaline is full · **E** throw / shove. Shift boost-push is optional. Weapons are picked up
+automatically when you roll over an upgrade. Controller: left stick (pull back to brake), right stick look, A ollie,
+RT attack, X trick/slam, B throw. Everything is remappable in Settings.
 
 ## Layout
 ```

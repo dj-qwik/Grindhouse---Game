@@ -24,7 +24,7 @@ function capsuleUnit(r) { const g = new THREE.CylinderGeometry(r, r * 0.9, 1, 8,
 
 function makeSkaterRig(look) {
   const T = THREE, L = SKATERS[look % SKATERS.length], root = new T.Group();
-  const body = toon(L.body), trim = toon(L.trim), skin = toon(L.skin), shoe = toon('#E8DDBD'), dark = toon('#22292B');
+  const body = toon('#ffffff', { map: clothTex(look, 'top') }), trim = toon('#ffffff', { map: clothTex(look, 'legs') }), skin = toon(L.skin), shoe = toon('#ffffff', { map: clothTex(look, 'shoe') }), dark = toon('#22292B');
   const ol = (m, w = 0.028) => { withOutline(m, w); m.castShadow = true; return m; };
   // board
   const board = new T.Group(); root.add(board);
@@ -52,9 +52,17 @@ function makeSkaterRig(look) {
   const eyes = [-0.06, 0.06].map((z) => { const e = new T.Mesh(new T.BoxGeometry(0.02, 0.05, 0.035), eyeM); e.position.set(0.13, 0.02, z); head.add(e); return e; });
   const mouth = new T.Mesh(new T.BoxGeometry(0.02, 0.02, 0.09), eyeM); mouth.position.set(0.13, -0.07, 0); head.add(mouth);
   addHair(head, L, ol);
+  // brows + nose: expressions read in close-ups
+  const brows = [-0.065, 0.065].map((z) => { const b = new T.Mesh(new T.BoxGeometry(0.02, 0.018, 0.06), eyeM); b.position.set(0.135, 0.065, z); head.add(b); return b; });
+  const nose = new T.Mesh(new T.BoxGeometry(0.05, 0.05, 0.04), skin); nose.position.set(0.145, -0.02, 0); head.add(nose);
+  // knee pads for the stunt rider / racer / courier, a backpack for the courier
+  const kneePads = [];
+  if (/stunt|leathers|courier/.test(L.style)) for (let k = 0; k < 2; k++) { const pd = ol(new T.Mesh(new T.SphereGeometry(0.085, 8, 6), toon('#22292B')), 0.015); pd.scale.set(1, 1.2, 1); root.add(pd); kneePads.push(pd); }
+  let pack = null;
+  if (/courier/.test(L.style)) { pack = ol(new T.Mesh(new T.BoxGeometry(0.2, 0.34, 0.3), toon('#FF9B36')), 0.02); root.add(pack); }
   // weapon slot in the right hand
   const hold = new T.Group(); root.add(hold);
-  const r = { root, board, deck, parts: { thighL, thighR, shinL, shinR, footL, footR, torso, uaL, uaR, faL, faR, handL, handR }, head, hold, eyes, mouth, look,
+  const r = { root, board, deck, parts: { thighL, thighR, shinL, shinR, footL, footR, torso, uaL, uaR, faL, faR, handL, handR }, head, hold, eyes, mouth, look, brows, pads: kneePads, pack,
     weapon: null, weaponId: null, phase: Math.random() * 6, crouch: 0, land: 0, lean: 0, lastYaw: 0, flip: 0, recoil: 0, swing: 0, throwT: 0, hitT: 0, lastHp: 100, lastAmmo: 0, tumble: 0, boardOff: null, alive: true, shade: 1 };
   return r;
 }
@@ -203,6 +211,15 @@ function poseRig(r, s, dt, view) {
     if (r.weapon.userData.saw) r.weapon.userData.saw.rotation.y += dt * 20;
   }
   r.hold.visible = s.alive;
+  // pads ride on the knees; the backpack sits on the back of the chest; brows angry when attacking
+  if (r.pads.length) { r.pads[0].position.copy(kL).add(V3().set(0.07, 0, 0)); r.pads[1].position.copy(kR).add(V3().set(0.07, 0, 0)); }
+  if (r.pack) { r.pack.position.copy(chest).add(V3().set(-0.22 * Math.cos(twist * 0.6), -0.12, 0.22 * Math.sin(twist * 0.6))); r.pack.rotation.set(0, twist * 0.6, -0.12 - c * 0.3); }
+  const mad = s.atk || r.hitT > 0 ? 0.35 : 0; r.brows[0].rotation.x = mad; r.brows[1].rotation.x = -mad;
+  // contact shadow
+  if (!r.blob) { r.blob = new THREE.Mesh(new THREE.CircleGeometry(0.55, 20), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 })); r.blob.rotation.x = -Math.PI / 2; GFX.scene.add(r.blob); }
+  const W = ROUND && ROUND.W, gy = W ? SIM0.groundAt(W, view.x, view.z, view.y + 0.3) : view.y;
+  const hgt = gy > -1e8 ? view.y - gy : 99; r.blob.visible = hgt < 6 && (s.alive || hgt < 1);
+  if (r.blob.visible) { r.blob.position.set(view.x, gy + 0.025, view.z); const k = Math.max(0.35, 1 - hgt * 0.15); r.blob.scale.setScalar(k); r.blob.material.opacity = 0.38 * k; }
 }
 
 // ── portraits for lobby seats (rendered once per look)
@@ -223,4 +240,38 @@ function portrait(look) {
   for (let y = 0; y < 128; y++) id.data.set(px.subarray((127 - y) * 512, (128 - y) * 512), y * 512);
   g.putImageData(id, 0, 0); rt.dispose();
   return (PORTRAITS[look] = cv.toDataURL());
+}
+
+// printed clothing per skater (original designs): hoodie logos, racing stripes, plaid, reflective tape, varsity
+// numbers, overalls, stunt stars, paint splatter; trousers with knee rips or stripes; sneakers with colour panels
+const CLOTH = {};
+function clothTex(look, part) {
+  const key = look + part; if (CLOTH[key]) return CLOTH[key];
+  const L = SKATERS[look % SKATERS.length], S = 256, cv = document.createElement('canvas'); cv.width = cv.height = S; const g = cv.getContext('2d');
+  const r = mulberry(look * 31 + part.length);
+  const fill = (c) => { g.fillStyle = c; g.fillRect(0, 0, S, S); };
+  const speck = (n, c, a) => { g.fillStyle = c; for (let i = 0; i < n; i++) { g.globalAlpha = a * r(); g.fillRect(r() * S, r() * S, 2, 2); } g.globalAlpha = 1; };
+  if (part === 'top') {
+    fill(L.body);
+    switch (L.id) {
+      case 'brick': g.fillStyle = L.trim; g.font = '900 64px Impact'; g.textAlign = 'center'; g.fillText('WRK', S * 0.25, S * 0.62); g.fillRect(0, S * 0.9, S, S * 0.1); break; // hoodie logo + cuff
+      case 'vex': g.fillStyle = L.trim; for (const x of [0.18, 0.28, 0.68, 0.78]) g.fillRect(S * x, 0, S * 0.05, S); g.fillStyle = '#F4EEDC'; g.beginPath(); g.arc(S * 0.25, S * 0.4, 22, 0, 7); g.fill(); g.fillStyle = '#22292B'; g.font = '900 28px Impact'; g.textAlign = 'center'; g.fillText('7', S * 0.25, S * 0.45); break;
+      case 'rot': g.strokeStyle = 'rgba(0,0,0,.35)'; g.lineWidth = 6; for (let k = 0; k < S; k += 28) { g.beginPath(); g.moveTo(k, 0); g.lineTo(k, S); g.moveTo(0, k); g.lineTo(S, k); g.stroke(); } g.strokeStyle = L.trim; g.lineWidth = 2; for (let k = 14; k < S; k += 28) { g.beginPath(); g.moveTo(k, 0); g.lineTo(k, S); g.moveTo(0, k); g.lineTo(S, k); g.stroke(); } for (let k = 0; k < 6; k++) { g.fillStyle = '#C9D3D6'; g.beginPath(); g.arc(r() * S, r() * S, 5, 0, 7); g.fill(); } break; // plaid + studs
+      case 'dash': g.fillStyle = '#C9D3D6'; g.fillRect(0, S * 0.35, S, 14); g.fillRect(0, S * 0.6, S, 14); g.fillStyle = L.trim; g.fillRect(S * 0.15, S * 0.45, 40, 30); g.fillRect(S * 0.6, S * 0.45, 40, 30); break; // reflective tape + pockets
+      case 'ace': g.fillStyle = L.trim; g.fillRect(0, 0, S * 0.15, S); g.fillRect(S * 0.85, 0, S * 0.15, S); g.fillStyle = '#22292B'; g.font = '900 90px Impact'; g.textAlign = 'center'; g.fillText('8', S * 0.3, S * 0.65); g.fillStyle = '#F4EEDC'; g.fillText('8', S * 0.3 - 4, S * 0.65 - 4); break; // varsity
+      case 'grease': g.fillStyle = L.trim; g.fillRect(S * 0.1, 0, S * 0.12, S); g.fillRect(S * 0.6, 0, S * 0.12, S); g.fillStyle = 'rgba(30,25,20,.35)'; for (let k = 0; k < 12; k++) { g.beginPath(); g.arc(r() * S, r() * S, 6 + r() * 14, 0, 7); g.fill(); } g.fillStyle = '#C9D3D6'; g.fillRect(S * 0.12, S * 0.2, 12, 12); g.fillRect(S * 0.62, S * 0.2, 12, 12); break; // overalls straps + grease
+      case 'crash': g.fillStyle = L.trim; for (let k = 0; k < 7; k++) { g.save(); g.translate(r() * S, r() * S); g.beginPath(); for (let j = 0; j < 10; j++) { const a = j * Math.PI / 5, rr = j % 2 ? 7 : 16; g.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); } g.fill(); g.restore(); } g.fillStyle = '#22292B'; g.fillRect(0, S * 0.48, S, 10); break; // stunt stars
+      case 'tag': for (const c of ['#B4E64A', '#FF5C69', '#36DCE8', '#FF9B36']) { g.fillStyle = c; for (let k = 0; k < 10; k++) { const x = r() * S, y = r() * S; g.beginPath(); g.arc(x, y, 3 + r() * 10, 0, 7); g.fill(); g.fillRect(x - 1, y, 3, 10 + r() * 20); } } break; // paint splatter
+    }
+    speck(500, '#000', 0.08);
+  } else if (part === 'legs') {
+    fill(L.trim);
+    if (/streetwear|graffiti|punk/.test(L.style)) { g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(S * 0.2, S * 0.45, S * 0.25, S * 0.1); g.fillStyle = L.skin; g.fillRect(S * 0.24, S * 0.48, S * 0.17, S * 0.04); } // knee rip
+    else { g.fillStyle = L.body; g.fillRect(S * 0.42, 0, S * 0.08, S); } // side stripe
+    speck(400, '#000', 0.1);
+  } else { // shoe
+    fill('#E8DDBD'); g.fillStyle = L.body; g.fillRect(0, S * 0.35, S, S * 0.25); g.fillStyle = '#22292B'; g.fillRect(0, S * 0.85, S, S * 0.15); g.fillStyle = L.deck; g.beginPath(); g.arc(S * 0.5, S * 0.45, 22, 0, 7); g.fill();
+  }
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return (CLOTH[key] = t);
 }

@@ -2,7 +2,7 @@
 // Toon materials with a 3-tone ramp, ink contour lines on hard edges, inverted-hull outlines on characters and
 // props, hard directional sun with shadows, saturated accents over warm cement. Arena meshes are built from the
 // same primitive data the physics uses, so what you see is what you collide with.
-const GFX = { r: null, scene: null, cam: null, sun: null, hemi: null, ramp: null, tex: {}, mats: {}, arena: null, built: null, w: 1, h: 1, quality: 1, clock: 0, fpsAvg: 60 };
+const GFX = { r: null, scene: null, cam: null, sun: null, hemi: null, ramp: null, tex: {}, nrm: {}, mats: {}, arena: null, built: null, w: 1, h: 1, quality: 1, clock: 0, fpsAvg: 60 };
 const INK = 0x22292b;
 const MAT_COLORS = {
   concrete: '#B7B0A0', wall: '#A39B88', wood: '#B07A45', plank: '#A8743F', metal: '#7D8B91', container: '#B85435', crate: '#9A6A3A',
@@ -10,8 +10,8 @@ const MAT_COLORS = {
   car: '#C9473E', tile: '#D8D2C2', fence: '#8E9AA0', neon: '#2B2140', bleacher: '#3E6FB0', conveyor: '#33393B', press: '#E2B13C',
   glass: '#9ED7E8', grass: '#6DA544', water: '#36A7C9',
 };
-const TEX_OF = { concrete: 'concrete', wall: 'concrete', stairs: 'stairs', wood: 'wood', plank: 'wood', crate: 'wood', metal: 'tread', press: 'hazard', gate: 'hazard',
-  container: 'ribs', brick: 'brick', roof: 'tread', asphalt: 'asphalt', sand: 'speckle', scrap: 'rust', car: 'rust', tile: 'tile', conveyor: 'belt', bleacher: 'ribs', grass: 'speckle', fence: 'fence', neon: 'neon' };
+const TEX_OF = { concrete: 'concrete', wall: 'wall', stairs: 'stairs', wood: 'wood', plank: 'wood', crate: 'wood', metal: 'tread', press: 'hazard', gate: 'hazard', roof: 'roof',
+  container: 'ribs', brick: 'brick', asphalt: 'asphalt', sand: 'speckle', scrap: 'rust', car: 'rust', tile: 'tile', conveyor: 'belt', bleacher: 'ribs', grass: 'speckle', fence: 'fence', neon: 'neon' };
 
 function initRender() {
   const T = THREE;
@@ -34,6 +34,7 @@ function initRender() {
   const ramp = new Uint8Array([128, 196, 255, 255]);
   GFX.ramp = new T.DataTexture(ramp, 4, 1, T.RedFormat); GFX.ramp.minFilter = GFX.ramp.magFilter = T.NearestFilter; GFX.ramp.needsUpdate = true;
   for (const k of ['concrete', 'stairs', 'wood', 'tread', 'hazard', 'ribs', 'brick', 'asphalt', 'speckle', 'rust', 'tile', 'belt', 'fence', 'neon', 'blood', 'water', 'graffiti0', 'graffiti1', 'graffiti2', 'graffiti3', 'graffiti4', 'graffiti5', 'smoke', 'spark', 'deck0', 'deck1', 'deck2']) GFX.tex[k] = makeTex(k);
+  buildHiTextures(); buildMacro(); buildDecor();
   addEventListener('resize', resize); resize();
 }
 function resize() {
@@ -120,22 +121,28 @@ function prismGeo(p) {
   if (p.type === 'box') prof.push([-p.d / 2, p.top], [p.d / 2, p.top]);
   else if (p.type === 'slope') prof.push([-p.d / 2, p.h0], [p.d / 2, p.h1]);
   else { const n = 14; for (let k = 0; k <= n; k++) { const z = -p.d / 2 + p.d * k / n; prof.push([z, surfLocal(p, z)]); } }
-  const y0 = p.y0, hw = p.w / 2, S = 3.2, pos = [], uv = [];
-  const tri = (a, b, c, ua, ub, uc) => { pos.push(...a, ...b, ...c); uv.push(...ua, ...ub, ...uc); };
+  const y0 = p.y0, hw = p.w / 2, S = 4.2, pos = [], uv = [], col = [];
+  // grime: walls darken toward their base (dirt, splash-back) and slightly under their top edge (rain drip)
+  const top = Math.max(...prof.map((q) => q[1]));
+  const shade = (v, side) => { if (!side) return 1; const u = Math.max(0, Math.min(1, (v[1] - y0) / 1.6)), e = Math.max(0, Math.min(1, (top - v[1]) / 0.35)); return (0.58 + 0.42 * u) * (0.86 + 0.14 * e); };
+  let SIDE = false;
+  const tri = (a, b, c, ua, ub, uc) => { pos.push(...a, ...b, ...c); uv.push(...ua, ...ub, ...uc); for (const v of [a, b, c]) { const k = shade(v, SIDE); col.push(k, k, k); } };
   const quad = (a, b, c, d, ua, ub, uc, ud) => { tri(a, b, c, ua, ub, uc); tri(a, c, d, ua, uc, ud); };
   let s = 0;
   for (let k = 0; k + 1 < prof.length; k++) { // top surface
     const [z0, h0] = prof[k], [z1, h1] = prof[k + 1], ds = Math.hypot(z1 - z0, h1 - h0);
-    quad([-hw, h0, z0], [hw, h0, z0], [hw, h1, z1], [-hw, h1, z1], [-hw / S, s / S], [hw / S, s / S], [hw / S, (s + ds) / S], [-hw / S, (s + ds) / S]);
-    s += ds;
+    SIDE = false; quad([-hw, h0, z0], [hw, h0, z0], [hw, h1, z1], [-hw, h1, z1], [-hw / S, s / S], [hw / S, s / S], [hw / S, (s + ds) / S], [-hw / S, (s + ds) / S]);
+    s += ds; SIDE = true;
     for (const x of [-hw, hw]) quad([x, y0, z0], [x, y0, z1], [x, h1, z1], [x, h0, z0], [z0 / S, y0 / S], [z1 / S, y0 / S], [z1 / S, h1 / S], [z0 / S, h0 / S]);
   }
   const f = prof[0], b = prof[prof.length - 1];
+  SIDE = true;
   if (f[1] > y0 + 1e-3) quad([-hw, y0, f[0]], [hw, y0, f[0]], [hw, f[1], f[0]], [-hw, f[1], f[0]], [-hw / S, y0 / S], [hw / S, y0 / S], [hw / S, f[1] / S], [-hw / S, f[1] / S]);
   if (b[1] > y0 + 1e-3) quad([-hw, y0, b[0]], [-hw, b[1], b[0]], [hw, b[1], b[0]], [hw, y0, b[0]], [-hw / S, y0 / S], [-hw / S, b[1] / S], [hw / S, b[1] / S], [hw / S, y0 / S]);
+  SIDE = false;
   if (y0 > 0.05) quad([-hw, y0, f[0]], [-hw, y0, b[0]], [hw, y0, b[0]], [hw, y0, f[0]], [0, 0], [0, 1], [1, 1], [1, 0]);
   const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   g.computeVertexNormals();
   return g;
 }
@@ -144,8 +151,10 @@ function matFor(p, look, idx) {
   let col = MAT_COLORS[p.mat] || MAT_COLORS.concrete;
   if (p.mat === 'container' || p.mat === 'car' || p.mat === 'bleacher') col = [col, '#2F8FB0', '#5E8F2E', '#D9822B', '#7356B8'][idx % 5];
   if (p.mat === 'concrete' && look && look.ground) col = look.ground;
-  const tk = TEX_OF[p.mat], opts = {};
-  if (tk) opts.map = GFX.tex[tk];
+  // per-surface variation so big concrete areas don't read as one flat colour
+  if (['concrete', 'wall', 'stairs', 'brick', 'wood', 'plank', 'roof', 'asphalt'].includes(p.mat)) { const v = idx % 3; col = '#' + new THREE.Color(col).offsetHSL(v === 1 ? 0.012 : v === 2 ? -0.01 : 0, v === 2 ? 0.05 : 0, v === 1 ? -0.035 : v === 2 ? 0.03 : 0).getHexString(); }
+  const tk = TEX_OF[p.mat], opts = { vertexColors: true, aoMap: GFX.macro, aoMapIntensity: 0.75 };
+  if (tk) { opts.map = GFX.tex[tk]; if (GFX.nrm[tk]) { opts.normalMap = GFX.nrm[tk]; opts.normalScale = new THREE.Vector2(0.9, 0.9); } }
   if (p.mat === 'glass') { opts.transparent = true; opts.opacity = 0.35; }
   if (p.mat === 'fence') { opts.transparent = true; opts.alphaTest = 0.4; opts.side = THREE.DoubleSide; }
   if (p.mat === 'neon') { opts.emissive = new THREE.Color('#1a1030'); }
@@ -171,12 +180,12 @@ function buildArena(R) {
   // ground: the arena floor, an outer apron to the horizon, or water / a long drop
   const half = W.half;
   if (W.floor) {
-    const fl = new T.Mesh(new T.PlaneGeometry(half * 2, half * 2), toon(look.ground || '#B7B0A0', { map: GFX.tex.concrete }));
-    fl.geometry.attributes.uv.array.forEach((v, k, a) => { a[k] = v * half * 2 / 3.2; });
+    const fl = new T.Mesh(new T.PlaneGeometry(half * 2, half * 2), toon(look.ground || '#B7B0A0', { map: GFX.tex.concrete, normalMap: GFX.nrm.concrete, normalScale: new T.Vector2(0.8, 0.8), aoMap: GFX.macro, aoMapIntensity: 0.75 }));
+    fl.geometry.attributes.uv.array.forEach((v, k, a) => { a[k] = v * half * 2 / 4.2; });
     fl.rotation.x = -Math.PI / 2; fl.receiveShadow = true; root.add(fl);
     addFloorMarks(root, W, look);
   }
-  const apron = new T.Mesh(new T.PlaneGeometry(900, 900), toon(look.water && !W.floor ? look.water : '#8C8574', { map: look.water && !W.floor ? GFX.tex.water : GFX.tex.asphalt }));
+  const apron = new T.Mesh(new T.PlaneGeometry(900, 900), toon(look.water && !W.floor ? look.water : '#8C8574', look.water && !W.floor ? { map: GFX.tex.water } : { map: GFX.tex.asphalt, normalMap: GFX.nrm.asphalt }));
   apron.geometry.attributes.uv.array.forEach((v, k, a) => { a[k] = v * 120; });
   apron.rotation.x = -Math.PI / 2; apron.position.y = W.floor ? -0.05 : look.water ? W.killY + 2.5 : W.killY - 14; apron.receiveShadow = true; root.add(apron); GFX.apron = apron;
   addSkyline(root, W, look);
@@ -190,8 +199,8 @@ function buildArena(R) {
     if (!dyn.prims.has(k)) {
       const g = prismGeo(p), m4 = new T.Matrix4().compose(new T.Vector3(p.cx, 0, p.cz), new T.Quaternion().setFromAxisAngle(new T.Vector3(0, 1, 0), p.yaw), new T.Vector3(1, 1, 1));
       g.applyMatrix4(m4);
-      let G = groups.get(mat); if (!G) { G = { pos: [], uv: [], edges: [] }; groups.set(mat, G); }
-      G.pos.push(...g.attributes.position.array); G.uv.push(...g.attributes.uv.array);
+      let G = groups.get(mat); if (!G) { G = { pos: [], uv: [], col: [], edges: [] }; groups.set(mat, G); }
+      G.pos.push(...g.attributes.position.array); G.uv.push(...g.attributes.uv.array); G.col.push(...g.attributes.color.array);
       const eg = new T.EdgesGeometry(g, 28); G.edges.push(...eg.attributes.position.array); eg.dispose(); g.dispose();
       return;
     }
@@ -205,7 +214,7 @@ function buildArena(R) {
   });
   const edgeMat = new T.LineBasicMaterial({ color: INK, transparent: true, opacity: 0.8 }), allEdges = [];
   for (const [mat, G] of groups) {
-    const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(G.pos, 3)); g.setAttribute('uv', new T.Float32BufferAttribute(G.uv, 2)); g.computeVertexNormals();
+    const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(G.pos, 3)); g.setAttribute('uv', new T.Float32BufferAttribute(G.uv, 2)); g.setAttribute('color', new T.Float32BufferAttribute(G.col, 3)); g.computeVertexNormals();
     const m = new T.Mesh(g, mat); m.castShadow = true; m.receiveShadow = true; root.add(m);
     allEdges.push(...G.edges);
   }
@@ -237,6 +246,7 @@ function buildArena(R) {
   });
   if (railStatic.pos.length) root.add(railMesh(railStatic));
   addGraffiti(root, W);
+  placeDecor(root, R); addSky(root, look); addMurals(root, W); addLedgeTrim(root, W, dyn.prims);
   // zone wall
   const zw = new T.Mesh(new T.CylinderGeometry(1, 1, 60, 64, 1, true), new T.ShaderMaterial({
     transparent: true, depthWrite: false, side: T.DoubleSide,
@@ -293,7 +303,8 @@ function addSkyline(root, W, look) {
   const T = THREE, rnd = mulberry(W.prims.length * 97 + W.half);
   const g = new T.BoxGeometry(1, 1, 1);
   const cols = ['#9C9484', '#8A8F8C', '#B0A48C', '#7E8A93', '#A88C72'];
-  const n = 70, inst = new T.InstancedMesh(g, toon('#ffffff'), n), m4 = new T.Matrix4(), q = new T.Quaternion(), c = new T.Color();
+  const wt = DECOR.windows.clone(); wt.repeat.set(2, 4); wt.needsUpdate = true;
+  const n = 70, inst = new T.InstancedMesh(g, toon('#ffffff', { map: wt }), n), m4 = new T.Matrix4(), q = new T.Quaternion(), c = new T.Color();
   for (let k = 0; k < n; k++) {
     const a = rnd() * Math.PI * 2, d = W.half + 30 + rnd() * 110, w = 8 + rnd() * 18, h = 10 + rnd() * (W.floor ? 45 : 25), y = W.floor ? h / 2 - 1 : W.killY - 14 + h / 2 + (look.water ? -40 : 0);
     m4.compose(new T.Vector3(Math.cos(a) * d, y, Math.sin(a) * d), q.setFromAxisAngle(new T.Vector3(0, 1, 0), rnd() * 3), new T.Vector3(w, h, w * (0.6 + rnd())));

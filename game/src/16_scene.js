@@ -2,13 +2,13 @@
 const RARITY_COL = { common: '#E8DDBD', uncommon: '#B4E64A', rare: '#36DCE8', legendary: '#FF9B36', starter: '#E8DDBD' };
 const CAMR = { yaw: 0, pitch: -0.12, pos: null, look: null, dist: 4, fov: 72, target: -1, mode: 'follow', orbit: 0, cine: null };
 const RIGS = new Map();
-function clearScene() { for (const r of RIGS.values()) GFX.scene.remove(r.root); RIGS.clear(); }
+function clearScene() { for (const r of RIGS.values()) { GFX.scene.remove(r.root); if (r.blob) GFX.scene.remove(r.blob); } RIGS.clear(); }
 // view(s) → { x, y, z, yaw, aimYaw, aimPitch } (interpolated / predicted pose)
 function syncDynamic(R, dt, view) {
   const T = THREE, B = GFX.built;
   for (const s of R.sk) {
     let r = RIGS.get(s.i);
-    if (!r || r.look !== s.look) { if (r) GFX.scene.remove(r.root); r = makeSkaterRig(s.look); RIGS.set(s.i, r); GFX.scene.add(r.root); }
+    if (!r || r.look !== s.look) { if (r) { GFX.scene.remove(r.root); if (r.blob) GFX.scene.remove(r.blob); } r = makeSkaterRig(s.look); RIGS.set(s.i, r); GFX.scene.add(r.root); }
     const v = view(s);
     poseRig(r, v.s || s, dt, v);
     r.root.visible = s.alive || s.y > -30;
@@ -85,7 +85,7 @@ function updateCamera(R, dt, tv, opts = {}) {
   // sun follows the action so shadows stay crisp near the camera
   const sd = GFX.sunDir || new T.Vector3(0.5, 0.8, 0.3);
   GFX.sun.position.set(tv.x + sd.x * 80, tv.y + sd.y * 80, tv.z + sd.z * 80); GFX.sun.target.position.set(tv.x, tv.y, tv.z); GFX.sun.target.updateMatrixWorld();
-  if (GFX.sky) GFX.sky.position.copy(cam.position);
+  if (GFX.sky) GFX.sky.position.copy(cam.position); if (GFX.skyDeco) GFX.skyDeco.position.copy(cam.position);
   AUDIO.listener.x = cam.position.x; AUDIO.listener.y = cam.position.y; AUDIO.listener.z = cam.position.z; AUDIO.listener.yaw = yaw;
   CAMR.yaw = yaw; CAMR.pitch = pitch;
 }
@@ -100,7 +100,7 @@ function orbitCamera(R, dt, x, y, z, radius = 9, height = 4, speed = 0.15) {
   cam.fov = 60; cam.updateProjectionMatrix();
   const sd = GFX.sunDir || new T.Vector3(0.5, 0.8, 0.3);
   GFX.sun.position.set(x + sd.x * 80, y + sd.y * 80, z + sd.z * 80); GFX.sun.target.position.set(x, y, z); GFX.sun.target.updateMatrixWorld();
-  if (GFX.sky) GFX.sky.position.copy(cam.position);
+  if (GFX.sky) GFX.sky.position.copy(cam.position); if (GFX.skyDeco) GFX.skyDeco.position.copy(cam.position);
   AUDIO.listener.x = cam.position.x; AUDIO.listener.y = cam.position.y; AUDIO.listener.z = cam.position.z; AUDIO.listener.yaw = a + Math.PI;
 }
 // soft auto-target: attacks lock onto the best enemy roughly in front of the camera (within ~40° and weapon
