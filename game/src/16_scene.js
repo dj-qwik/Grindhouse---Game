@@ -103,20 +103,48 @@ function orbitCamera(R, dt, x, y, z, radius = 9, height = 4, speed = 0.15) {
   if (GFX.sky) GFX.sky.position.copy(cam.position);
   AUDIO.listener.x = cam.position.x; AUDIO.listener.y = cam.position.y; AUDIO.listener.z = cam.position.z; AUDIO.listener.yaw = a + Math.PI;
 }
-// crosshair convergence: shots leave the chest and land where the crosshair points
+// soft auto-target: attacks lock onto the best enemy roughly in front of the camera (within ~40° and weapon
+// range, in sight); otherwise they go straight ahead. No crosshair, no aiming while you skate and trick.
 function aimFrom(R, me) {
-  const cam = GFX.cam, T = THREE, dir = new T.Vector3(); cam.getWorldDirection(dir);
-  const o = cam.position;
-  let d = SIM0.raycast(R.W, o.x, o.y, o.z, dir.x, dir.y, dir.z, 90);
+  const camYaw = INPUT.yaw, ranged = me.ranged && me.ammo > 0, Wp = ranged ? WEAPONS[me.ranged] : WEAPONS[me.melee || 'bat'];
+  const range = ranged ? Math.min(Wp.range, 38) : 9;
+  let best = null, bs = 1e9;
   for (const s of R.sk) {
     if (!s.alive || s.i === me.i) continue;
-    const ox = s.x - o.x, oy = s.y + 1 - o.y, oz = s.z - o.z, t = ox * dir.x + oy * dir.y + oz * dir.z;
-    if (t <= 0 || t >= d) continue;
-    const px = o.x + dir.x * t - s.x, py = o.y + dir.y * t - (s.y + 1), pz = o.z + dir.z * t - s.z;
-    if (Math.hypot(px, py * 0.6, pz) < 0.6) d = t;
+    const dx = s.x - me.x, dz = s.z - me.z, d = Math.hypot(dx, dz);
+    if (d > range || Math.abs(s.y - me.y) > 6) continue;
+    const ang = Math.abs(angWrap(Math.atan2(dx, dz) - camYaw));
+    if (ang > (d < 3 ? 1.2 : 0.7)) continue;
+    const score = ang * 9 + d * 0.15;
+    if (score >= bs) continue;
+    if (!SIM0.raycast || SIM0.raycast(R.W, me.x, me.y + 1.3, me.z, dx / (d || 1), (s.y - me.y) / (d || 1), dz / (d || 1), d) < d - 0.3) continue;
+    bs = score; best = s;
   }
-  const px = o.x + dir.x * d, py = o.y + dir.y * d, pz = o.z + dir.z * d;
-  const cx = me.x, cy = me.y + 1.35, cz = me.z, dx = px - cx, dy = py - cy, dz = pz - cz, h = Math.hypot(dx, dz);
-  if (h < 1.2) return { yaw: CAMR.yaw, pitch: CAMR.pitch };
-  return { yaw: Math.atan2(dx, dz), pitch: Math.max(-1.0, Math.min(1.0, Math.atan2(dy, h))) };
+  GAME.lock = best ? best.i : -1;
+  if (!best) return { yaw: camYaw, pitch: 0 };
+  const lead = ranged && Wp.proj ? Math.hypot(best.x - me.x, best.z - me.z) / Wp.proj : 0;
+  const tx = best.x + best.vx * lead - me.x, ty = best.y + 1.0 + best.vy * lead - (me.y + 1.35), tz = best.z + best.vz * lead - me.z, h = Math.hypot(tx, tz);
+  return { yaw: Math.atan2(tx, tz), pitch: Math.max(-1, Math.min(1, Math.atan2(ty, Math.max(0.5, h)))) };
+}
+// lock-on marker: a ring at the target's feet and a chevron over its head
+function syncLock(R, view) {
+  const T = THREE;
+  if (!GFX.lockMark) {
+    const g = new T.Group();
+    const ring = new T.Mesh(new T.RingGeometry(0.75, 0.95, 32), new T.MeshBasicMaterial({ color: '#FF5C69', transparent: true, opacity: 0.85, depthWrite: false, side: T.DoubleSide }));
+    ring.rotation.x = -Math.PI / 2; ring.position.y = 0.06; g.add(ring);
+    const chev = new T.Mesh(new T.ConeGeometry(0.16, 0.3, 3), new T.MeshBasicMaterial({ color: '#FF5C69' })); chev.rotation.x = Math.PI; chev.position.y = 2.45; g.add(chev);
+    g.userData = { ring, chev }; GFX.lockMark = g; GFX.scene.add(g);
+  }
+  const g = GFX.lockMark, i = GAME.lock;
+  const on = i >= 0 && GAME.screen === 'match' && GAME.phase === 'play' && R.sk[i] && R.sk[i].alive;
+  g.visible = !!on; if (!on) return;
+  const v = view(R.sk[i]); g.position.set(v.x, v.y, v.z);
+  g.userData.ring.rotation.z += 0.04; g.userData.chev.position.y = 2.45 + Math.sin(GFX.clock * 6) * 0.08;
+}
+// The simulation reads the stick relative to the aim yaw; re-express the camera-relative stick in that frame so
+// locking onto someone never changes which way you steer.
+function stickFor(inp, aimYaw) {
+  const C = INPUT.yaw, wx = inp.my * Math.sin(C) - inp.mx * Math.cos(C), wz = inp.my * Math.cos(C) + inp.mx * Math.sin(C);
+  return { mx: -wx * Math.cos(aimYaw) + wz * Math.sin(aimYaw), my: wx * Math.sin(aimYaw) + wz * Math.cos(aimYaw) };
 }

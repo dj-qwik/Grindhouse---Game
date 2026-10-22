@@ -74,14 +74,12 @@ function howtoCard() {
       <div style="display:grid;gap:10px;align-content:start">
         <h3>Controls</h3>
         <div class="keys">
-          ${k('fwd')}<span>Push (WASD steer, relative to camera)</span>${k('boost')}<span>Boost push (you take +25% damage)</span>
-          ${k('brake')}<span>Brake / powerslide (also C)</span>${k('jump')}<span>Ollie (hold to charge)</span>
-          ${k('trick')}<span>Trick: + left/right/back/forward in the air</span><kbd>Q + S</kbd><span>Manual on the ground</span>
-          ${k('attack')}<span>Attack / fire</span>${k('alt')}<span>Aim / charge melee · + attack at 100 = Slam</span>
-          ${k('use')}<span>Pick up</span>${k('swap')}<span>Swap melee/gun (wheel, 1, 2)</span>${k('throw')}<span>Shove / throw</span><kbd>Mouse</kbd><span>Look / aim</span>
+          <kbd>${esc(keyLabel(KEYMAP.fwd) + keyLabel(KEYMAP.left) + keyLabel(KEYMAP.brake) + keyLabel(KEYMAP.right))}</kbd><span>Push · steer · ${esc(keyLabel(KEYMAP.brake))} brakes</span>${k('jump')}<span>Ollie (hold to pop higher)</span>
+          ${k('attack')}<span>Attack: locks onto whoever's in front</span>${k('trick')}<span>Trick in the air · Slam when Adrenaline is full</span>
+          ${k('throw')}<span>Throw / shove</span><kbd>Mouse</kbd><span>Look and steer</span>
         </div>
-        <p class="fine" style="padding:0">Controller: left stick steer, right stick look, RT push/boost, LT brake, A ollie, X trick, RB attack, LB aim, Y pick up, B throw, D-pad swap.</p>
-        <p class="fine" style="padding:0">Drop onto rails to grind. Hit tall walls at speed in the air to wallride. Off a steep quarter pipe without popping you go straight up and come back in; hold ollie at the lip to transfer.</p>
+        <p class="fine" style="padding:0">Controller: left stick steer (pull back to brake), right stick look, A ollie, RT attack, X trick / slam, B throw.</p>
+        <p class="fine" style="padding:0">Weapons are picked up automatically when you roll over an upgrade. Attack uses your gun, or your melee weapon when someone's close. Hold a direction while you trick for different flips. Drop onto rails to grind; hit tall walls in the air to wallride.</p>
       </div>
     </div>
     <div class="row"><button class="btn primary" id="back">Got it</button></div>
@@ -97,7 +95,6 @@ function settingsCard() {
         <label class="label">Field of view <b>${Math.round(SETTINGS.fov * 100)}%</b><input type="range" min="0.85" max="1.2" step="0.01" value="${SETTINGS.fov}" data-set="fov" style="width:100%"></label>
         <label class="label">Volume <b>${Math.round(AUDIO.vol * 100)}%</b><input type="range" min="0" max="1" step="0.05" value="${AUDIO.vol}" data-set="vol" style="width:100%"></label>
         <label class="check"><input type="checkbox" data-set="invertY" ${SETTINGS.invertY ? 'checked' : ''}><span>Invert camera Y</span></label>
-        <label class="check"><input type="checkbox" data-set="altToggle" ${SETTINGS.altToggle ? 'checked' : ''}><span>Aim is a toggle (instead of hold)</span></label>
         <label class="check"><input type="checkbox" data-set="vibrate" ${SETTINGS.vibrate ? 'checked' : ''}><span>Controller vibration</span></label>
         <div style="display:grid;gap:6px"><span class="label">Graphics</span><div class="seg">${['auto', 'high', 'low'].map((q) => `<button class="${SETTINGS.quality === q ? 'sel' : ''}" data-quality="${q}">${q}</button>`).join('')}</div></div>
       </div>
@@ -160,7 +157,7 @@ function beginCountdown(sec) {
     <div class="countdown" id="cdn"></div>${lockHint()}`);
   musicMode('match'); musicStart();
 }
-const lockHint = () => (INPUT.usingPad ? '' : `<div class="lockhint" id="lockHint" ${INPUT.locked ? 'hidden' : ''}>Click to aim with the mouse</div>`);
+const lockHint = () => (INPUT.usingPad ? '' : `<div class="lockhint" id="lockHint" ${INPUT.locked ? 'hidden' : ''}>Click to use the mouse</div>`);
 
 // ───────────── per-frame
 function frame(now) {
@@ -174,7 +171,7 @@ function frame(now) {
     if (ROUND) {
       syncArena(ROUND, ROUND.t, dt);
       const view = viewFn();
-      syncDynamic(ROUND, dt, view);
+      syncDynamic(ROUND, dt, view); syncLock(ROUND, view);
       cameraFrame(dt, view);
       if (GAME.screen === 'match') { updateHud(ROUND, dt); deathFrame(); }
       const me = ROUND.sk[viewSeat()];
@@ -199,11 +196,11 @@ function perf(dt) {
 function viewFn() {
   const R = ROUND, a = Math.min(1, GAME.acc / DT), pred = GAME.mode === 'online' && GAME.phase === 'play' ? NET.predicted() : null;
   return (s) => {
-    if (pred && s.i === GAME.me && s.alive) return { x: GAME.shown.x, y: GAME.shown.y, z: GAME.shown.z, yaw: pred.yaw, aimYaw: INPUT.yaw, aimPitch: INPUT.pitch, vx: pred.vx, vz: pred.vz, s: pred };
+    if (pred && s.i === GAME.me && s.alive) return { x: GAME.shown.x, y: GAME.shown.y, z: GAME.shown.z, yaw: pred.yaw, aimYaw: pred.aimYaw, aimPitch: pred.aimPitch, vx: pred.vx, vz: pred.vz, s: pred };
     const p = GAME.prev.get(s.i) || s, k = R.winner || GAME.phase !== 'play' ? 1 : a;
     const yaw = p.yaw + angWrap(s.yaw - p.yaw) * k;
     const mine = s.i === GAME.me && GAME.mode === 'practice';
-    return { x: p.x + (s.x - p.x) * k, y: p.y + (s.y - p.y) * k, z: p.z + (s.z - p.z) * k, yaw, aimYaw: mine ? INPUT.yaw : s.aimYaw, aimPitch: mine ? INPUT.pitch : s.aimPitch, vx: s.vx, vz: s.vz };
+    return { x: p.x + (s.x - p.x) * k, y: p.y + (s.y - p.y) * k, z: p.z + (s.z - p.z) * k, yaw, aimYaw: mine ? s.aimYaw : s.aimYaw, aimPitch: s.aimPitch, vx: s.vx, vz: s.vz };
   };
 }
 function cameraFrame(dt, view) {
@@ -230,7 +227,7 @@ function cameraFrame(dt, view) {
     updateCamera(R, dt, v, { yaw: INPUT.yaw + t * 0.6, pitch: -0.45, dist: 3 + t * 1.5 });
     return;
   }
-  updateCamera(R, dt, v, { yaw: INPUT.yaw, pitch: INPUT.pitch, aim: !!(tgt.btn & BTN.alt) && tgt.alive });
+  updateCamera(R, dt, v, { yaw: INPUT.yaw, pitch: INPUT.pitch });
 }
 
 function practiceFrame(dt, inp) {
@@ -254,9 +251,10 @@ function practiceFrame(dt, inp) {
     while (GAME.acc >= DT && n++ < 6) {
       GAME.acc -= DT;
       snapPrev();
-      const aim = me.alive ? aimFrom(R, me) : { yaw: INPUT.yaw, pitch: INPUT.pitch };
+      const aim = me.alive ? aimFrom(R, me) : { yaw: INPUT.yaw, pitch: 0 };
       const btn = GAME.pend | heldMask() | (INPUT.padHeld || 0); GAME.pend = 0;
-      const p = SIM0.packInput({ mx: inp.mx, my: inp.my, yaw: aim.yaw, pitch: aim.pitch, btn, lag: 0 });
+      const st = stickFor(inp, aim.yaw);
+      const p = SIM0.packInput({ mx: st.mx, my: st.my, yaw: aim.yaw, pitch: aim.pitch, btn, lag: 0 });
       const inputs = { [GAME.me]: p };
       GAME.inputs.push(p);
       R.step(inputs);
@@ -268,7 +266,7 @@ function practiceFrame(dt, inp) {
   if (GAME.phase === 'done') { GAME.acc += dt * 0.35; while (GAME.acc >= DT) { GAME.acc -= DT; snapPrev(); R.coast(); } doneFrame(dt); }
 }
 // buttons that are physically held stay down across catch-up ticks (presses only count once)
-function heldMask() { let m = 0; for (const a of ['boost', 'brake', 'jump', 'trick', 'attack', 'use', 'throw']) if (act(a)) m |= BTN[a]; if (SETTINGS.altToggle ? INPUT.altLatched : act('alt')) m |= BTN.alt; return m; }
+function heldMask() { let m = 0; for (const a of ['boost', 'brake', 'jump', 'trick', 'attack', 'throw']) if (act(a)) m |= BTN[a]; if (keyDown(ALT_KEYS.brake)) m |= BTN.brake; return m; }
 function attractFrame(dt) {
   const R = ROUND; GAME.acc += dt; GAME.attractFocus = (GAME.attractFocus || 0) + dt * 0.12;
   let n = 0; while (GAME.acc >= DT && n++ < 4) { GAME.acc -= DT; snapPrev(); R.step({}); if (R.winner) { if (!GAME.attractEnd) GAME.attractEnd = performance.now(); break; } }

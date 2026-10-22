@@ -168,7 +168,7 @@ function stepAir(s, W, dt, btn, press, mag, dX, dZ, ctl) {
   }
   capSpeed(s);
   // tricks: trick + direction in the air. One at a time; land before it finishes and you bail.
-  if ((press & BTN.trick) && !s.trick && s.airT > 0.05) {
+  if ((press & BTN.trick) && !s.trick && s.airT > 0.05 && s.adren < 100) {
     s.trick = s.mx < -0.5 ? 'kickflip' : s.mx > 0.5 ? 'heelflip' : s.my < -0.5 ? 'shuvit' : s.my > 0.5 ? 'tre' : 'kickflip';
     s.trickT = 0; sk_sfx(s, 'flick', 0.6);
   }

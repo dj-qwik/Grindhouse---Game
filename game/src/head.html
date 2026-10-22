@@ -138,6 +138,11 @@ body.playing #top>*{pointer-events:none}
 .slot.on{opacity:1;border-color:var(--lime);box-shadow:3px 3px 0 #0008}
 .slot b{font:13px/1.1 var(--display)}.slot small{font-size:11px;color:var(--dim)}
 .slot .ammo{font:22px/1 var(--display);color:var(--cream)}
+.adr{height:14px;border-radius:4px;border:3px solid var(--ink);background:#151a1b;overflow:hidden;position:relative;box-shadow:3px 3px 0 #0008}
+.adr i{position:absolute;inset:0;transform-origin:left;transform:scaleX(0);background:linear-gradient(90deg,var(--cream),var(--lime));transition:transform .2s}
+.adr.half i{background:linear-gradient(90deg,var(--lime),#d3ff7a)}.adr.full i{background:linear-gradient(90deg,var(--orange),var(--coral));animation:throb .4s infinite alternate}
+.adr .m50{position:absolute;left:50%;top:0;bottom:0;width:2px;background:var(--ink)}
+.adr span{position:absolute;inset:0;display:grid;place-items:center;font:800 9px/1 var(--body);letter-spacing:1.5px;color:var(--cream);text-shadow:1px 1px 0 var(--ink),-1px -1px 0 var(--ink)}
 .hint{font-size:12px;color:var(--dim);background:rgba(26,31,33,.8);padding:3px 8px;border-radius:4px}
 #cross{position:absolute;left:50%;top:50%;width:0;height:0}
 #cross svg{position:absolute;left:-60px;top:-60px;width:120px;height:120px;overflow:visible}
@@ -189,12 +194,6 @@ body[data-err]:after{content:attr(data-err);position:fixed;left:10px;bottom:10px
   <div class="hclock"><div class="t" id="hTime">60</div><div class="sub" id="hPhase">GO</div></div>
   <div class="hsurv"><span id="hAlive">8</span><small>alive</small></div>
   <div class="hfeed" id="hFeed"></div>
-  <div id="cross"><svg viewBox="-60 -60 120 120">
-    <circle r="27" fill="none" stroke="rgba(34,41,43,.6)" stroke-width="7"/>
-    <circle id="adrRing" r="27" fill="none" stroke="#B4E64A" stroke-width="5" stroke-dasharray="0 170" transform="rotate(-90)" stroke-linecap="round"/>
-    <g id="reticle" stroke="#F4EEDC" stroke-width="2.5" stroke-linecap="round"><line x1="-11" x2="-5"/><line x1="5" x2="11"/><line y1="-11" y2="-5"/><line y1="5" y2="11"/></g>
-    <circle r="1.8" fill="#F4EEDC"/>
-  </svg></div>
   <svg class="hitmark" id="hitmark" viewBox="-13 -13 26 26"><g stroke="#FF5C69" stroke-width="3" stroke-linecap="round"><line x1="-11" y1="-11" x2="-5" y2="-5"/><line x1="11" y1="-11" x2="5" y2="-5"/><line x1="-11" y1="11" x2="-5" y2="5"/><line x1="11" y1="11" x2="5" y2="5"/></g></svg>
   <div class="dmgdir" id="dmgdir"></div>
   <div class="vignette" id="vig"></div>
@@ -203,7 +202,7 @@ body[data-err]:after{content:attr(data-err);position:fixed;left:10px;bottom:10px
   <div class="trickpop" id="trick"></div>
   <div class="pip" id="pip"><span id="pipTxt">WRECKED</span></div>
   <div class="hbottom">
-    <div class="hhealth"><div class="nm" id="hName">You</div><div class="bar" id="hBar"><i class="lag" id="hLag"></i><i id="hHp"></i><span id="hHpT">100</span></div><div class="hint" id="hHint">Space ollie · Q+dir trick · LMB attack · E pick up</div></div>
+    <div class="hhealth"><div class="nm" id="hName">You</div><div class="bar" id="hBar"><i class="lag" id="hLag"></i><i id="hHp"></i><span id="hHpT">100</span></div><div class="adr" id="hAdrBar"><i id="hAdr"></i><b class="m50"></b><span id="hAdrT">ADRENALINE</span></div><div class="hint" id="hHint"></div></div>
     <div class="hweap"><div class="slots" id="hSlots"></div></div>
   </div>
   <div class="netstat" id="netstat"></div>

@@ -13,15 +13,38 @@ const AUTO_FIRE = { nailgun: true, smg: true };
 
 function stepCombat(R, s) {
   if (!s.alive) return;
-  const dt = DT, btn = s.btn, press = s.press, W = R.W;
+  const dt = DT, btn = s.btn, press = s.press;
   s.fireCd -= dt; s.bankT += dt;
   s.altT = btn & BTN.alt ? s.altT + dt : 0;
   if (s.mode === MODE.DOWN) { s.atk = null; return; }
-  if ((press & BTN.swap) && s.ranged && !s.atk) { s.slot = s.slot ? 0 : 1; s.fireCd = Math.max(s.fireCd, 0.2); sk_sfx(s, 'swap', 0.5); }
   if ((press & BTN.throw) && s.thr && s.stagger <= 0) { doThrow(R, s); return; }
+  // the trick button doubles as the Signature Slam once Adrenaline is full
+  if ((press & BTN.trick) && s.adren >= 100 && s.stagger <= 0) { signature(R, s); return; }
   if ((press & BTN.attack) && (btn & BTN.alt) && s.adren >= 100 && s.stagger <= 0) { signature(R, s); return; }
+  // one attack button: the gun when you have one, the melee weapon when someone is in swinging range in front
+  if (!s.atk) s.slot = chooseSlot(R, s);
   if (s.slot === 1 && s.ranged) fireRanged(R, s, btn, press);
   else meleeStep(R, s, press);
+}
+function chooseSlot(R, s) {
+  if (!s.ranged || s.ammo <= 0) return 0;
+  const reach = WEAPONS[s.melee || 'bat'].reach + 0.8;
+  for (const q of R.sk) {
+    if (q === s || !q.alive) continue;
+    const dx = q.x - s.x, dz = q.z - s.z, d = hyp(dx, dz);
+    if (d < reach && Math.abs(q.y - s.y) < 1.8 && (d < 0.8 || Math.abs(angDiff(yawOf(dx, dz), s.aimYaw)) < 0.9)) return 0;
+  }
+  return 1;
+}
+const RARITY_RANK = { starter: 0, common: 1, uncommon: 2, rare: 3, legendary: 4 };
+/** Would rolling over this weapon be an upgrade? (empty slot, better rarity, or the same gun = ammo refill) */
+function wantsPickup(s, w, ammo) {
+  const Wp = WEAPONS[w], rank = (id) => (id ? RARITY_RANK[WEAPONS[id].rarity] : -1);
+  if (Wp.cls === 'melee') return !s.melee || rank(w) > rank(s.melee);
+  if (Wp.cls === 'throw') return !s.thr || rank(w) > rank(s.thr);
+  if (!s.ranged || s.ammo <= 0) return true;
+  if (s.ranged === w) return (ammo || Wp.ammo) > s.ammo;
+  return rank(w) > rank(s.ranged);
 }
 
 // ── melee: an arc swept over the active window; one hit per target per swing
@@ -266,16 +289,17 @@ function dropPickup(R, w, x, y, z, ammo) {
   const gy = groundAt(R.W, x, z, y + 1);
   R.picks.push({ id: R.nextId++, w, x, y: gy > -1e8 ? gy : y, z, t0: R.t + 0.3, ammo: ammo || 0, rarity: WEAPONS[w].rarity, dropped: true });
 }
+// Pickups are automatic: roll over a weapon and you take it if it's an upgrade (bible §9 contested pedestals).
 function stepPickups(R) {
   const n = R.sk.length, start = R.tick % n;
   for (let j = 0; j < n; j++) {
     const s = R.sk[(start + j) % n];
-    if (!s.alive || !(s.press & BTN.use) || s.mode === MODE.DOWN) continue;
-    let best = null, bd = 1.9;
+    if (!s.alive || s.mode === MODE.DOWN) continue;
+    let best = null, bd = 1.6;
     for (const p of R.picks) {
       if (R.t < p.t0) continue;
       const d = hyp(p.x - s.x, p.z - s.z);
-      if (d < bd && Math.abs(p.y - s.y) < 2.2) { bd = d; best = p; }
+      if (d < bd && Math.abs(p.y - s.y) < 2.2 && wantsPickup(s, p.w, p.ammo)) { bd = d; best = p; }
     }
     if (best) takePickup(R, s, best);
   }
@@ -285,7 +309,8 @@ function takePickup(R, s, p) {
   const Wp = WEAPONS[p.w];
   if (Wp.cls === 'melee') { if (s.melee && s.melee !== 'bat') dropPickup(R, s.melee, s.x, s.y, s.z, 0); s.melee = p.w; s.slot = 0; }
   else if (Wp.cls === 'throw') { if (s.thr && s.thr !== 'shove') dropPickup(R, s.thr, s.x, s.y, s.z, 0); s.thr = p.w; }
-  else { if (s.ranged) dropPickup(R, s.ranged, s.x, s.y, s.z, s.ammo); s.ranged = p.w; s.ammo = p.ammo || Wp.ammo; s.slot = 1; }
+  else if (s.ranged === p.w) s.ammo = Math.max(s.ammo, p.ammo || Wp.ammo);
+  else { if (s.ranged && s.ammo > 0) dropPickup(R, s.ranged, s.x, s.y, s.z, s.ammo); s.ranged = p.w; s.ammo = p.ammo || Wp.ammo; s.slot = 1; }
   s.atk = null; s.fireCd = Math.max(s.fireCd, 0.25);
   sk_sfx(s, 'pickup', 1);
   pickupFx(s.i, p.w);

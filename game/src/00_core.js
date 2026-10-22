@@ -155,14 +155,5 @@ function musicTick() {
   }
 }
 function musicMode(mode) { MUSIC.menu = mode === 'menu'; MUSIC.layer = mode === 'late' ? 1 : 0; MUSIC.bpm = mode === 'menu' ? 120 : mode === 'late' ? 172 : 160; }
-// announcer: a short stinger + the line, read by the browser's voice (restrained, bible §15)
-let lastSay = 0;
-function say(text) {
-  playSfx('go', null, null, null, 0.7);
-  if (performance.now() - lastSay < 900) return; lastSay = performance.now();
-  try {
-    if (!('speechSynthesis' in window) || AUDIO.muted) return;
-    const u = new SpeechSynthesisUtterance(text.toLowerCase()); u.rate = 1.15; u.pitch = 0.55; u.volume = 0.9 * AUDIO.vol;
-    speechSynthesis.cancel(); speechSynthesis.speak(u);
-  } catch {}
-}
+// announcer: on-screen text only (plus a short stinger), no voice
+function say() { playSfx('go', null, null, null, 0.5); }

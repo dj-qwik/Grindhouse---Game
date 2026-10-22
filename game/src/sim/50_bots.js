@@ -23,7 +23,7 @@ function botInput(R, s) {
     if (!s.ranged || s.melee === 'bat' || (s.thr === 'shove' && RNG() < 0.3)) {
       let pd = 22;
       for (const p of R.picks) {
-        if (t < p.t0 - 0.6) continue;
+        if (t < p.t0 - 0.6 || !wantsPickup(s, p.w, p.ammo)) continue;
         const d = hyp(p.x - s.x, p.z - s.z) + Math.abs(p.y - s.y) * 2;
         if (d < pd && (d < td * 0.9 || !s.ranged) && hyp(p.x - Z.x, p.z - Z.z) < Z.r * 0.95) { pd = d; B.pick = p.id; }
       }
@@ -99,7 +99,6 @@ function botInput(R, s) {
   }
   if ((s.btn & BTN.trick) && s.mode === MODE.AIR) { mx = B.trickDir === 0 ? -1 : B.trickDir === 1 ? 1 : 0; my = B.trickDir === 2 ? -1 : B.trickDir === 3 ? 1 : my; }
   // ── pick up
-  if (pick && hyp(pick.x - s.x, pick.z - s.z) < 1.6 && t >= pick.t0 && !(s.prevBtn & BTN.use)) btn |= BTN.use;
   // ── fight
   // early on bots scramble for gear and only fight back; from 12 s they pick fights inside their engage radius
   const provoked = tq && s.lastBy === tq.i && t - s.lastByT < 2.5;
@@ -107,9 +106,7 @@ function botInput(R, s) {
   if (tq && t > WARMUP && hostile) {
     const dy = Math.abs(tq.y - s.y), facing = Math.abs(angDiff(yawOf(tq.x - s.x, tq.z - s.z), aimYaw)) < 0.5;
     const wantRanged = s.ranged && B.los && td > 2.6 && td < WEAPONS[s.ranged].range * 0.8;
-    if (wantRanged && s.slot === 0 && !(s.prevBtn & BTN.swap)) btn |= BTN.swap;
-    else if (!wantRanged && s.slot === 1 && td < 3 && !(s.prevBtn & BTN.swap)) btn |= BTN.swap;
-    if (s.adren >= 100 && td < 3.8 && dy < 2 && !(s.prevBtn & BTN.attack)) btn |= BTN.alt | BTN.attack;
+    if (s.adren >= 100 && td < 3.8 && dy < 2 && !(s.prevBtn & BTN.trick)) btn |= BTN.trick;
     else if (s.slot === 1 && s.ranged && wantRanged && facing) {
       B.fireT -= DT;
       const auto = AUTO_FIRE[s.ranged];

@@ -127,7 +127,7 @@ function pushFeed(html, mine) {
   setTimeout(() => d.remove(), 6500);
 }
 // HUD bits the hooks use
-function banner(text) { const b = $('#banner'); if (!b) return; b.textContent = text; b.classList.remove('on'); void b.offsetWidth; b.classList.add('on'); if (GAME.phase === 'play' || text === 'WINNER') say(text); }
+function banner(text) { const b = $('#banner'); if (!b) return; b.textContent = text; b.classList.remove('on'); void b.offsetWidth; b.classList.add('on'); if (GAME.phase === 'play' || text === 'WINNER') say(); }
 function trickPop(main, sub) { const t = $('#trick'); if (!t) return; t.innerHTML = `${esc(main)}<small>${esc(sub || '')}</small>`; t.classList.remove('on'); void t.offsetWidth; t.classList.add('on'); }
 function hitmarker(amt) { const h = $('#hitmark'); if (!h) return; h.classList.remove('on'); void h.offsetWidth; h.classList.add('on'); h.style.transform = `scale(${1 + Math.min(1, amt / 40)})`; }
 const DMG_IND = [];

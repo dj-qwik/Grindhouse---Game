@@ -15,25 +15,22 @@ function updateHud(R, dt) {
   setText('hName', me.i === GAME.me ? (GAME.myName || 'You') : 'Watching · ' + nameOf(me.i));
   const hp = Math.max(0, me.hp), hpT = Math.ceil(hp);
   const bar = $('#hHp'); if (bar && HUD.cache.hp !== hpT) { HUD.cache.hp = hpT; bar.style.transform = `scaleX(${hp / 100})`; $('#hLag').style.transform = `scaleX(${hp / 100})`; $('#hBar').classList.toggle('low', hp < 30); setText('hHpT', String(hpT)); }
-  // Adrenaline ring around the crosshair: 50 = boosted melee hit, 100 = signature ready
-  const a = Math.max(0, Math.min(100, me.adren)), ring = $('#adrRing');
-  if (ring && HUD.cache.ad !== a) { HUD.cache.ad = a; ring.setAttribute('stroke-dasharray', `${(a / 100) * 169.6} 170`); ring.setAttribute('stroke', a >= 100 ? '#FF9B36' : a >= 50 ? '#B4E64A' : '#E8DDBD'); }
-  // weapon slots
-  const sl = [
-    ['melee', me.melee ? WEAPONS[me.melee].name : '—', me.slot === 0, ''],
-    ['ranged', me.ranged ? WEAPONS[me.ranged].name : 'empty', me.slot === 1, me.ranged ? String(me.ammo) : ''],
-    ['throw', me.thr ? WEAPONS[me.thr].name : 'empty', false, me.thr ? 'F' : ''],
-  ];
-  setHtml('hSlots', sl.map(([k, n, on, extra]) => `<div class="slot${on ? ' on' : ''}"><small>${k}</small><b>${esc(n)}</b>${extra ? `<span class="ammo">${esc(extra)}</span>` : ''}</div>`).join(''));
-  // contextual hint: nearest pickup, signature ready, controls
-  let hint = '';
-  if (me.alive) {
-    let best = null, bd = 2.2; for (const p of R.picks) { if (t < p.t0) continue; const d = Math.hypot(p.x - me.x, p.z - me.z); if (d < bd && Math.abs(p.y - me.y) < 2.2) { bd = d; best = p; } }
-    if (best) hint = `${keyLabel(KEYMAP.use)} · pick up ${WEAPONS[best.w].name}`;
-    else if (me.adren >= 100) hint = `${keyLabel(KEYMAP.alt)} + ${keyLabel(KEYMAP.attack)} · SIGNATURE SLAM ready`;
-    else if (t < 6) hint = `${keyLabel(KEYMAP.jump)} ollie · ${keyLabel(KEYMAP.trick)}+dir trick · ${keyLabel(KEYMAP.attack)} attack · ${keyLabel(KEYMAP.use)} pick up · ${keyLabel(KEYMAP.throw)} shove/throw`;
-    else if (me.adren >= 50) hint = 'Adrenaline 50+: your next melee hit lands harder';
+  // Adrenaline bar: 50 = boosted melee hit, 100 = Signature Slam on the trick button
+  const a = Math.max(0, Math.min(100, me.adren));
+  if (HUD.cache.ad !== a) {
+    HUD.cache.ad = a; $('#hAdr').style.transform = `scaleX(${a / 100})`;
+    const bar = $('#hAdrBar'); bar.classList.toggle('half', a >= 50 && a < 100); bar.classList.toggle('full', a >= 100);
+    setText('hAdrT', a >= 100 ? `SLAM READY · ${keyLabel(KEYMAP.trick)}` : a >= 50 ? 'ADRENALINE · NEXT HIT BOOSTED' : 'ADRENALINE');
   }
+  // weapons: melee · gun (+ammo) · throwable. Attack picks the right one for you.
+  const sl = [
+    ['melee', me.melee ? WEAPONS[me.melee].name : '—', me.alive && me.slot === 0, ''],
+    ['gun', me.ranged ? WEAPONS[me.ranged].name : 'none', me.alive && me.slot === 1 && !!me.ranged, me.ranged ? String(me.ammo) : ''],
+    ['throw · ' + keyLabel(KEYMAP.throw), me.thr ? WEAPONS[me.thr].name : 'none', false, ''],
+  ];
+  setHtml('hSlots', sl.map(([k, n, on, extra]) => `<div class="slot${on ? ' on' : ''}"><small>${esc(k)}</small><b>${esc(n)}</b>${extra ? `<span class="ammo">${esc(extra)}</span>` : ''}</div>`).join(''));
+  let hint = '';
+  if (me.alive && me.i === GAME.me && t < 7) hint = `${keyLabel(KEYMAP.jump)} ollie · ${keyLabel(KEYMAP.attack)} attack · ${keyLabel(KEYMAP.trick)} trick in the air · ${keyLabel(KEYMAP.throw)} throw · roll over weapons to grab them`;
   setText('hHint', hint || ' ');
   $('#hHint').style.visibility = hint ? 'visible' : 'hidden';
   // trick banking popups

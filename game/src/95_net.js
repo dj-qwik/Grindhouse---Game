@@ -103,7 +103,8 @@ const NET = (() => {
     if (live && R.sk[GAME.me] && R.sk[GAME.me].alive) {
       const body = N.pred || R.sk[GAME.me], aim = aimFrom(R, body);
       const lag = Math.max(0, Math.min(15, Math.round(N.rtt / (1000 / 60) + N.F.buffered + 1)));
-      p = SIM0.packInput({ mx: inp.mx, my: inp.my, yaw: aim.yaw, pitch: aim.pitch, btn: inp.btn | heldMask(), lag });
+      const st = stickFor(inp, aim.yaw);
+      p = SIM0.packInput({ mx: st.mx, my: st.my, yaw: aim.yaw, pitch: aim.pitch, btn: inp.btn | heldMask(), lag });
     }
     // send on change (presses go out immediately), at most once per tick otherwise
     const now = performance.now(), btnNew = inp.btn & ~(heldMask());
