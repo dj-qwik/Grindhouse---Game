@@ -66,21 +66,21 @@ function howtoCard() {
       <div style="display:grid;gap:10px;align-content:start">
         <h3>The match</h3>
         <ul class="fine" style="font-size:14px;color:var(--text)">
-          <li>Everyone spawns with a Splinter Bat and one Shove. Scavenge the rest from glowing pedestals (waves at 3, 17, 33 and 44 s).</li>
+          <li>Everyone spawns with a Scrap Pistol, a Splinter Bat and one Shove. Roll over glowing pedestals to grab better guns and gear (waves at 3, 17, 33 and 44 s).</li>
           <li>One life. The safe zone squeezes from 12 s; outside it you take escalating damage. From 50 s only the final core is safe and lethal pulses speed up.</li>
           <li>Last skater standing wins. At exactly 60 s the server ranks survivors by <b>health</b>, then <b>eliminations</b>, then <b>damage dealt</b>, then a <b>seeded tiebreak order</b> fixed before the match. If everyone left goes down on the same tick, the same ranking uses health from just before that tick.</li>
-          <li>Tricks don't score points: clean landings fill your <b>Adrenaline</b>. At 50 your next melee hit lands harder. At 100 you can unleash a Signature Slam. Repeating the same trick pays less each time.</li>
+          <li>Tricks don't score points: clean landings fill your <b>Adrenaline</b>. Trick + ←→↑↓ are quick flips; trick + a diagonal are the big ones (360 Flip, Laser Flip, Hardflip, 540 McTwist) that need a charged launch off a ramp. Trick with no direction at the top of a quarter pipe is a Handplant. Chain moves in one combo for up to ×2. At 50 your next melee hit lands harder; at 100 unleash a Signature Slam. Repeating the same trick pays less each time.</li>
         </ul>
       </div>
       <div style="display:grid;gap:10px;align-content:start">
         <h3>Controls</h3>
         <div class="keys">
-          <kbd>${esc(keyLabel(KEYMAP.fwd) + keyLabel(KEYMAP.left) + keyLabel(KEYMAP.brake) + keyLabel(KEYMAP.right))}</kbd><span>Push · steer · ${esc(keyLabel(KEYMAP.brake))} brakes</span>${k('jump')}<span>Ollie (hold to pop higher)</span>
+          <kbd>${esc(keyLabel(KEYMAP.fwd) + keyLabel(KEYMAP.left) + keyLabel(KEYMAP.brake) + keyLabel(KEYMAP.right))}</kbd><span>Push · steer · ${esc(keyLabel(KEYMAP.brake))} brakes</span>${k('jump')}<span>Ollie (hold up a ramp, release at the lip for a big launch)</span>
           ${k('attack')}<span>Attack: locks onto whoever's in front</span>${k('trick')}<span>Trick in the air · Slam when Adrenaline is full</span>
           ${k('throw')}<span>Throw / shove</span><kbd>Mouse</kbd><span>Look and steer</span>
         </div>
         <p class="fine" style="padding:0">Controller: left stick steer (pull back to brake), right stick look, A ollie, RT attack, X trick / slam, B throw.</p>
-        <p class="fine" style="padding:0">Weapons are picked up automatically when you roll over an upgrade. Attack uses your gun, or your melee weapon when someone's close. Hold a direction while you trick for different flips. Drop onto rails to grind; hit tall walls in the air to wallride.</p>
+        <p class="fine" style="padding:0">Weapons are picked up automatically when you roll over an upgrade. Attack uses your gun, or your melee weapon when someone's close. Hold a direction while you trick for different flips (diagonals = big tricks). Drop onto rails to grind; hit tall walls in the air to wallride.</p>
       </div>
     </div>
     <div class="row"><button class="btn primary" id="back">Got it</button></div>
@@ -150,15 +150,24 @@ function startPractice() {
   bindRound(R, players, 'practice', 0);
   GAME.key = key; GAME.seed = seed; GAME.inputs = []; GAME.replaySrc = free ? null : { kind: 'practice', key, seed, players, inputs: GAME.inputs };
   if (free) GAME.inputs = { push() {} }; // nothing to replay in free ride; don't keep an ever-growing log
-  beginCountdown(3);
+  beginCountdown(GAME.seenHow ? 4 : 6); GAME.seenHow = true;
 }
 function beginCountdown(sec) {
   GAME.screen = 'match'; GAME.phase = 'count'; GAME.countT = sec; GAME.acc = 0; GAME.results = null;
   showOverlay(''); hudShow(true); INPUT.enabled = true; requestLock();
   const A = ROUND.def;
-  hudExtra(`<div class="prestart" id="pre"><div class="a">${esc(A.name.toUpperCase())}</div><div class="b">${esc(A.finale || '')}</div><div class="b" style="background:var(--ink)">${ROUND.free ? 'Free ride · no timer · no fighting · Esc to leave' : 'Last skater standing · 60 s cap · ties: health › kills › damage › seeded order'}</div></div>
+  hudExtra(howToCard() + `<div class="prestart" id="pre"><div class="a">${esc(A.name.toUpperCase())}</div><div class="b">${esc(A.finale || '')}</div><div class="b" style="background:var(--ink)">${ROUND.free ? 'Free ride · no timer · no fighting · Esc to leave' : 'Last skater standing · 60 s cap · ties: health › kills › damage › seeded order'}</div></div>
     <div class="countdown" id="cdn"></div>${lockHint()}`);
   musicMode('match'); musicStart();
+}
+// the pre-match sign: what to do, and how Adrenaline works (shown over the countdown)
+function howToCard() {
+  const K = (a) => `<kbd>${esc(keyLabel(KEYMAP[a]))}</kbd>`, free = ROUND && ROUND.free;
+  return `<div class="howpop" id="howpop"><b class="t">${free ? 'FREE RIDE' : 'LAST SKATER STANDING'}</b>
+    ${free ? '<p>No clock, no fighting. Skate, trick, have fun. Esc to leave.</p>' : `<p>Roll over glowing weapons to grab them. ${K('attack')} attacks whoever's in front (guns first). Stay inside the zone.</p>`}
+    <p class="ad"><b>ADRENALINE</b> fills when you <b>land tricks</b>: in the air hold ${K('trick')} + <b>↑ ↓ ← →</b> for quick flips, or a <b>diagonal</b> (two keys at once) for the big tricks that need a charged launch off a ramp.</p>
+    <p>Hold ${K('jump')} up a ramp and let go at the lip for a <b>charged launch</b>. Chain tricks, grinds, wallrides and handplants (${K('trick')} at the top of a quarter pipe) for a <b>combo multiplier</b>.</p>
+    ${free ? '' : `<p><b>50</b> = next melee hit boosted · <b>100</b> = press ${K('trick')} for the <b>Signature Slam</b></p>`}</div>`;
 }
 const lockHint = () => (INPUT.usingPad ? '' : `<div class="lockhint" id="lockHint" ${INPUT.locked ? 'hidden' : ''}>Click to use the mouse</div>`);
 

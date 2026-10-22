@@ -64,13 +64,21 @@ const PICKUP_WAVES = [ // telegraphed 1.5 s ahead; t = when they become availabl
 const TELEGRAPH = 1.5;
 
 // Adrenaline (bible §5): clean landings bank trick rewards. Repeats decay to 25%.
+// Trick + stick direction picks the trick: 4 straight directions = quick flips, 4 diagonals = big tricks that
+// need real air (a charged ollie off a ramp). Several in one jump chain into a combo multiplier.
 const TRICKS = {
-  kickflip: { name: 'Kickflip', dur: 0.45, pts: 8 },
-  heelflip: { name: 'Heelflip', dur: 0.45, pts: 8 },
-  shuvit: { name: 'Shuvit', dur: 0.5, pts: 10 },
-  tre: { name: '360 Shuvit', dur: 0.7, pts: 10 },
+  kickflip: { name: 'Kickflip', dur: 0.45, pts: 12 },       // ←
+  heelflip: { name: 'Heelflip', dur: 0.45, pts: 12 },       // →
+  shuvit: { name: 'Shuvit', dur: 0.5, pts: 13 },            // ↓
+  tre: { name: '360 Shuvit', dur: 0.7, pts: 16 },           // ↑
+  treflip: { name: '360 Flip', dur: 0.8, pts: 24 },         // ↖
+  laser: { name: 'Laser Flip', dur: 0.85, pts: 26 },        // ↗
+  hardflip: { name: 'Hardflip', dur: 0.72, pts: 20 },       // ↙
+  mctwist: { name: '540 McTwist', dur: 1.05, pts: 36 },     // ↘
+  handplant: { name: 'Handplant', dur: 0.9, pts: 26 },      // trick, no direction, at the top of a quarter pipe
 };
-const REPEAT_DECAY = [1, 0.65, 0.4, 0.25];
+const REPEAT_DECAY = [1, 0.75, 0.5, 0.35];
+const COMBO_STEP = 0.2, COMBO_MAX = 2; // ×1.2 for 2 moves in a combo, ×1.4 for 3 … up to ×2
 
 // Outside-the-zone damage per second by phase (bible §3). Arena hazards out-damage any weapon by 50 s.
 function zoneDps(t) { return t < 12 ? 0 : t < 28 ? 4 : t < 40 ? 8 : t < 50 ? 16 : 30; }

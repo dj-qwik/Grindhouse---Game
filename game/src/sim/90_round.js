@@ -110,7 +110,7 @@ function createRound(cfg, rng = {}) {
         for (const s of sk) { s.fx0 = s.x; s.fz0 = s.z; s.fy0 = s.y; s.fm0 = s.mode; }
         for (const s of sk) stepSkater(s, W, R.t);
         separateSkaters(sk);
-        if (!W.floor) for (const s of sk) { keepOnMap(s); netCatch(s); }
+        for (const s of sk) { keepOnMap(s); netCatch(s); } // open air, water and pits are walled off
         stepDeuces(R);
         for (const s of sk) { if (s.fell) { R.respawns = (R.respawns || 0) + 1; s.lastRespawn = R.tick; respawn(s); } s.hp = 100; s.prevBtn = s.btn; recordHist(s, R.tick); }
         return null;
@@ -163,7 +163,7 @@ function createRound(cfg, rng = {}) {
      *  only — no combat, no effects, no RNG. Display only; the confirmed simulation stays authoritative. */
     predict(i, inputs) {
       const s = sk[i]; if (!s || !s.alive) return null;
-      const c = Object.assign({}, s, { pred: true, combo: s.combo.slice(), hist: s.hist.slice(), atk: s.atk ? { ...s.atk, hit: s.atk.hit.slice() } : null, deuce: s.deuce ? { ...s.deuce } : null });
+      const c = Object.assign({}, s, { pred: true, combo: s.combo.slice(), hist: s.hist.slice(), atk: s.atk ? { ...s.atk, hit: s.atk.hit.slice() } : null, deuce: s.deuce ? { ...s.deuce } : null, plant: s.plant ? { ...s.plant } : null });
       let t = R.t;
       for (const p of inputs) {
         const u = unpackInput(p);

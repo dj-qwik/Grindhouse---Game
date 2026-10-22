@@ -37,7 +37,8 @@ function updateHud(R, dt) {
   // trick banking popups
   if (mine && mine.lastBank && mine.lastBank !== HUD.lastBank) {
     HUD.lastBank = mine.lastBank;
-    if (mine.i === viewSeat() && mine.lastBank.pts > 0) trickPop(`+${mine.lastBank.pts} ADRENALINE`, mine.lastBank.tricks.map((k) => (TRICKS[k] ? TRICKS[k].name : k)).join(' · '));
+    const B = mine.lastBank, nm = { transfer: 'Transfer', wallride: 'Wallride', grind: 'Grind' };
+    if (mine.i === viewSeat() && B.pts > 0) trickPop(`+${B.pts} ADRENALINE${B.mult > 1 ? ` · ×${B.mult.toFixed(2).replace(/0$/, '')} COMBO` : ''}`, B.tricks.map((k) => (TRICKS[k] ? TRICKS[k].name : nm[k] || k)).join(' + '));
   }
   // low health heartbeat + vignette; zone warning
   $('#vig').style.opacity = me.alive && hp < 35 ? String(0.35 + (35 - hp) / 60 + Math.sin(performance.now() / 160) * 0.1) : '0';

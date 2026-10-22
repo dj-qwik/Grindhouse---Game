@@ -145,10 +145,20 @@ function poseRig(r, s, dt, view) {
   if (s.trick && air) {
     const dur = TRICKS[s.trick].dur, u = Math.min(1, s.trickT / dur), e = u * u * (3 - 2 * u);
     B.position.y = 0.25 + Math.sin(u * Math.PI) * 0.25; feetLift = 0.25 + Math.sin(u * Math.PI) * 0.2;
-    if (s.trick === 'kickflip') B.rotation.z = e * Math.PI * 2; else if (s.trick === 'heelflip') B.rotation.z = -e * Math.PI * 2;
-    else if (s.trick === 'shuvit') B.rotation.y = e * Math.PI; else B.rotation.y = e * Math.PI * 2;
+    const P2 = Math.PI * 2;
+    if (s.trick === 'kickflip') B.rotation.z = e * P2; else if (s.trick === 'heelflip') B.rotation.z = -e * P2;
+    else if (s.trick === 'shuvit') B.rotation.y = e * Math.PI; else if (s.trick === 'tre') B.rotation.y = e * P2;
+    else if (s.trick === 'treflip') { B.rotation.y = e * P2; B.rotation.z = e * P2; }
+    else if (s.trick === 'laser') { B.rotation.y = -e * P2; B.rotation.z = -e * P2; }
+    else if (s.trick === 'hardflip') { B.rotation.x = e * P2; B.rotation.y = e * Math.PI; }
+    else if (s.trick === 'mctwist') { root.rotateY(e * Math.PI * 3); root.rotateZ(Math.sin(u * Math.PI) * 2.6); B.position.y = 0.1; feetLift = 0.1; } // inverted 540: board stays on the feet
   } else if (air) { B.position.y = 0.2; feetLift = 0.2; B.rotation.x = Math.max(-0.4, Math.min(0.4, -s.vy * 0.03)); }
   if (s.manual > 0) { B.rotation.x = -0.32; B.position.y = 0.06; }
+  if (s.plant) { // handplant: inverted over the coping, one hand down, board held up on the feet
+    const u = Math.min(1, s.plant.t / 0.18), out = Math.max(0, (s.plant.t - 0.72) / 0.18);
+    root.rotateX(-Math.PI * (u - out) * 0.92); root.position.y += 1.55 * (u - out);
+    B.position.y = 0.05; feetLift = 0.05;
+  }
   if (s.mode === MODE.WALL) { const side = Math.sign(-Math.cos(yaw) * s.wallNx + Math.sin(yaw) * s.wallNz) || 1; root.rotateZ(side * 1.15); }
   if (s.mode === MODE.GROUND && s.onPrim && s.ny < 0.99) { // tilt with the ramp
     const nx = s.nx, nz = s.nz, f = Math.sin(yaw) * nx + Math.cos(yaw) * nz, sd = Math.cos(yaw) * nx - Math.sin(yaw) * nz;
@@ -191,7 +201,7 @@ function poseRig(r, s, dt, view) {
   const side = V3().set(Math.sin(twist), 0, Math.cos(twist));
   const shL = V3().copy(sh).addScaledVector(side, 0.2), shR = V3().copy(sh).addScaledVector(side, -0.2);
   let hR, hL;
-  const wid = s.alive && !(ROUND && ROUND.free) ? (s.slot === 1 && s.ranged ? s.ranged : s.melee || 'bat') : null;
+  const wid = s.alive && !s.plant && !(ROUND && ROUND.free) ? (s.slot === 1 && s.ranged ? s.ranged : s.melee || 'bat') : null;
   const ranged = wid && AIM_IDS[wid];
   if (ranged) {
     hR = V3().copy(sh).addScaledVector(aimDir, 0.48 - r.recoil * 0.12).addScaledVector(side, -0.05);
@@ -210,6 +220,7 @@ function poseRig(r, s, dt, view) {
     if (air || s.mode === MODE.GRIND) hR.addScaledVector(side, -0.25).y += 0.25;
   }
   if (s.adren >= 100 && s.alive && !ranged && !s.atk) hR.y += 0.1;
+  if (s.plant) { hL = V3().copy(shL).add(V3().set(0.05, 0.62, 0.04)); hR = V3().copy(shR).add(V3().set(0.25, -0.15, -0.1)); }
   if (dw > 0) { // hands: at the waistband while the trousers go down / up, otherwise braced on the knees
     const wL = V3().copy(hip).add(V3().set(-0.02, 0.06, 0.2)), wR = V3().copy(hip).add(V3().set(-0.02, 0.06, -0.2));
     if (pulling) { const k = DT0 < 1.5 ? sm((DT0 - 0.72) / 0.33) : 1 - sm((DT0 - 2.42) / 0.36); wL.y -= 0.32 * k; wR.y -= 0.32 * k; wL.x += 0.05 * k; wR.x += 0.05 * k; hL = wL; hR = wR; }

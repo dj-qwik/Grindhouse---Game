@@ -178,6 +178,13 @@ body.playing #top>*{pointer-events:none}
 body[data-err]:after{content:attr(data-err);position:fixed;left:10px;bottom:10px;background:var(--coral);color:var(--ink);padding:8px 12px;border-radius:6px;z-index:99;font-weight:800}
 #touch{display:none}
 body.freeride #hBar,body.freeride .hweap{display:none}
+.howpop{position:absolute;left:50%;top:15%;transform:translateX(-50%);width:min(560px,calc(100vw - 32px));background:var(--panel);border:3px solid var(--ink);border-radius:12px;box-shadow:6px 6px 0 var(--ink);padding:14px 18px;display:grid;gap:8px;color:var(--cream);animation:howIn .35s ease-out}
+.howpop .t{font:22px/1 var(--display);color:var(--lime);text-shadow:2px 2px 0 var(--ink)}
+.howpop p{margin:0;font-size:14px;line-height:1.4}.howpop .ad b:first-child{color:var(--orange)}
+.howpop kbd{font:600 12px/1 var(--mono, monospace);background:var(--ink);border-radius:4px;padding:2px 6px}
+@keyframes howIn{from{opacity:0;transform:translate(-50%,-12px)}to{opacity:1;transform:translate(-50%,0)}}
+@media (max-height:560px){.howpop{top:4%;padding:10px 14px}.howpop p{font-size:12px}}
+.howpop ~ .countdown{inset:auto;left:50%;top:calc(15% - 30px);transform:translateX(min(250px,calc(50vw - 70px)));font-size:84px;text-shadow:4px 4px 0 var(--ink),8px 8px 0 var(--coral);z-index:2}
 </style>
 </head>
 <body>

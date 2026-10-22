@@ -141,7 +141,7 @@ function collideSkater(W, s) {
     toLocal(p, s.x, s.z); if (inFoot(p)) { s.vy = 0; s.y = Math.min(s.y, p.y0 - SK_H); }
   }
   // arena bounds (an invisible fence just past the authored walls)
-  const lim = W.half + 4;
+  const lim = W.floor ? W.half - SK_R : W.half + 4; // walled arenas: never past the floor, even off a big launch
   if (s.x > lim) { s.x = lim; s.vx = Math.min(0, s.vx); } if (s.x < -lim) { s.x = -lim; s.vx = Math.max(0, s.vx); }
   if (s.z > lim) { s.z = lim; s.vz = Math.min(0, s.vz); } if (s.z < -lim) { s.z = -lim; s.vz = Math.max(0, s.vz); }
 }
