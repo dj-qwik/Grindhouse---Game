@@ -66,7 +66,7 @@ ARENAS.spillway = {
     for (const s of R.sk) {
       if (!s.alive) continue;
       // shallow water drags
-      if (s.mode === MODE.GROUND && s.y < 0.2 && s.x > A.water.x0 && s.x < A.water.x1) { s.vx *= 0.985; s.vz *= 0.985; }
+      if (s.mode === MODE.GROUND && s.y < 0.2 && s.x > A.water.x0 && s.x < A.water.x1) { s.vx *= 0.996; s.vz *= 0.996; }
       // the drain grinder (live after 12 s)
       if (t >= 12 && s.y < 1.2) { const dx = s.x - g.x, dz = s.z - g.z, d = hyp(dx, dz); if (d < g.r) hazardHit(R, s, 22, dx / (d || 1) * 9, dz / (d || 1) * 9, 'grinder'); }
       // gates: contact hurts and shoves you inward

@@ -16,7 +16,7 @@ function botInput(R, s) {
       if (d < bs) { bs = d; best = q.i; }
     }
     B.tgt = best;
-    B.aimErr = (RNG() - 0.5) * (1 - s.skill) * 0.32;
+    B.aimErr = (RNG() - 0.5) * ((1 - s.skill) * 0.5 + 0.06);
     // scavenge when under-armed and a pickup is nearer than the fight
     B.pick = -1;
     const tq = best >= 0 ? R.sk[best] : null, td = tq ? hyp(tq.x - s.x, tq.z - s.z) : 99;
@@ -90,9 +90,9 @@ function botInput(R, s) {
     else if (s.slot === 1 && s.ranged && wantRanged && facing) {
       B.fireT -= DT;
       const auto = AUTO_FIRE[s.ranged];
-      if (auto ? B.fireT < 0.5 : !(s.prevBtn & BTN.attack) && RNG() < 0.25 + s.skill * 0.4) btn |= BTN.attack;
+      if (auto ? B.fireT < 0.45 : !(s.prevBtn & BTN.attack) && RNG() < 0.05 + s.skill * 0.1) btn |= BTN.attack;
       if (B.fireT < 0) B.fireT = 0.9 + RNG() * 0.6;
-    } else if (td < WEAPONS[s.melee || 'bat'].reach + 0.7 && dy < 1.8 && facing && !s.atk && !(s.prevBtn & BTN.attack)) btn |= BTN.attack;
+    } else if (td < WEAPONS[s.melee || 'bat'].reach + 0.7 && dy < 1.8 && facing && !s.atk && !(s.prevBtn & BTN.attack) && RNG() < 0.06 + s.skill * 0.12) btn |= BTN.attack;
     if (s.thr && !(s.prevBtn & BTN.throw)) {
       if (s.thr === 'shove' ? td < 2 && RNG() < 0.03 : td > 6 && td < 15 && B.los && RNG() < 0.02 + s.skill * 0.02) { btn |= BTN.throw; pitch = s.thr === 'shove' ? pitch : clamp((td - 8) * 0.03, -0.2, 0.35); }
     }

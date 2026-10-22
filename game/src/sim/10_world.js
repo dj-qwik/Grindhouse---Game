@@ -109,11 +109,12 @@ function collideSkater(W, s) {
   CN_P = null; CN_V = 0;
   for (let pass = 0; pass < 2; pass++) for (const p of W.prims) {
     if (p.gone || Math.abs(s.x - p.cx) > p.rad + SK_R || Math.abs(s.z - p.cz) > p.rad + SK_R) continue;
-    if (p.y0 >= s.y + SK_H || primTop(p) <= s.y + STEP) continue;
+    const step = STEP + (s.stepX || 0);
+    if (p.y0 >= s.y + SK_H || primTop(p) <= s.y + step) continue;
     toLocal(p, s.x, s.z);
     const hw = p.w / 2, hd = p.d / 2, qx = clamp(LX, -hw, hw), qz = clamp(LZ, -hd, hd);
     const sh = surfL(p, qz);
-    if (sh <= s.y + STEP) continue; // can roll onto it (or we're above it)
+    if (sh <= s.y + step) continue; // can roll onto it (or we're above it)
     let ex = LX - qx, ez = LZ - qz, d = hyp(ex, ez), push;
     if (d >= SK_R) continue;
     if (d > 1e-6) { ex /= d; ez /= d; push = SK_R - d; }

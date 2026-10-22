@@ -6,7 +6,7 @@
 const MODE = { GROUND: 0, AIR: 1, GRIND: 2, WALL: 3, DOWN: 4 };
 const HIST = 16; // lag-compensation history (ticks)
 const MOVE = {
-  pushA: 9.5, cap: 12, boostA: 13, boostCap: 14.5, maxSpeed: 22, roll: 0.35, drag: 0.0028, brake: 9.5,
+  pushA: 11.5, cap: 12, boostA: 15, boostCap: 14.5, maxSpeed: 22, roll: 0.35, drag: 0.0028, brake: 9.5,
   grip: 12, slideGrip: 2.8, turnLo: 5.2, turnHi: 2.5, carveKeep: 0.93,
   pop: 6.3, popCharge: 1.7, chargeMax: 0.45, coyote: 0.1, jumpBuf: 0.12,
   airA: 3.2, airTurn: 4.5, railSnap: 0.65, railMinSpeed: 2.5, wallMin: 5, wallMax: 1.1,
@@ -73,6 +73,7 @@ function pop(s) {
   sk_sfx(s, 'pop', 0.7 + 0.3 * k);
 }
 function goAir(s) {
+  s.vertX = 0; s.vertZ = 0;
   if (s.mode !== MODE.AIR) { s.mode = MODE.AIR; s.airT = 0; s.airY0 = s.y; s.airMaxY = s.y; s.airX0 = s.x; s.airZ0 = s.z; s.wallDone = false; }
 }
 
@@ -134,13 +135,20 @@ function stepGround(s, W, dt, btn, mag, dX, dZ, ctl) {
   else {
     // off a lip. Off a steep quarter pipe without popping you go straight up and come back in ("vert air");
     // hold jump at the lip to keep your outward speed and transfer.
+    let vert = false;
     if (was && was.type === 'qp' && was.ang > 0.9 && s.charge < 0 && s.vy > 1) {
-      const a = s.vx * was.s + s.vz * was.c; if (a > 0) { s.vx -= was.s * a * 0.92; s.vz -= was.c * a * 0.92; }
+      const a = s.vx * was.s + s.vz * was.c; s.vx -= was.s * (a + 0.7); s.vz -= was.c * (a + 0.7); vert = true;
     }
+    // ramp impulse (bible §5): transitions and kickers throw you a little higher than pure physics would
+    if (was && was.type !== 'box' && s.vy > 1) s.vy += was.type === 'qp' ? 2.5 : 1.0;
     goAir(s); s.coyote = MOVE.coyote; s.onPrim = null;
+    if (vert) { s.vertX = was.s; s.vertZ = was.c; }
   }
   if (s.mode === MODE.GROUND && GP && (GP.vx || GP.vz)) { s.x += GP.vx * dt; s.z += GP.vz * dt; } // conveyors / moving decks
+  // climbing a transition: the deck behind its lip is the ramp's continuation, not a wall
+  s.stepX = s.mode === MODE.GROUND && s.onPrim && s.onPrim.type !== 'box' && s.vy > 0 ? clamp(s.vy * 0.12, 0, 0.6) : 0;
   collideSkater(W, s);
+  s.stepX = 0;
   if (CN_V > 12.5 && s.immune <= 0 && s.y - oy < 0.5) bail(s, 'slam');
 }
 
@@ -149,7 +157,9 @@ function stepAir(s, W, dt, btn, press, mag, dX, dZ, ctl) {
   s.vy -= G * dt;
   if (mag > 0.2) { // capped air control + spin toward the stick
     const sp = hyp(s.vx, s.vz), along = (s.vx * dX + s.vz * dZ) / mag;
-    if (along < 6) { s.vx += dX / mag * MOVE.airA * dt * ctl; s.vz += dZ / mag * MOVE.airA * dt * ctl; }
+    let ax = dX / mag * MOVE.airA * dt * ctl, az = dZ / mag * MOVE.airA * dt * ctl;
+    if (s.vertX || s.vertZ) { const o = ax * s.vertX + az * s.vertZ; if (o > 0) { ax -= o * s.vertX; az -= o * s.vertZ; } } // vert air: stay over the ramp
+    if (along < 6) { s.vx += ax; s.vz += az; }
     const nsp = hyp(s.vx, s.vz); if (nsp > sp && nsp > 1e-4) { const k = Math.max(sp, 6) / nsp; if (k < 1) { s.vx *= k; s.vz *= k; } }
     const diff = angDiff(yawOf(dX, dZ), s.yaw); s.yaw = angWrap(s.yaw + clamp(diff, -MOVE.airTurn * dt, MOVE.airTurn * dt));
   }
