@@ -181,3 +181,23 @@ function poopMesh() {
   g.userData.flies = flies;
   return g;
 }
+
+// ── auto camera: when you're not looking around yourself, the camera eases back behind your skater
+// (following where you're travelling, not which way the board spins in the air), and the pitch settles to default.
+const AUTOCAM = { rev: 0, w: 0 };
+function autoFollow(dt, s) {
+  const idle = (performance.now() - (INPUT.lookAt || 0)) / 1000;
+  if (idle < 0.9 || !s || !s.alive) { AUTOCAM.w = 0; return; }
+  AUTOCAM.w = Math.min(1, AUTOCAM.w + dt * 0.8); // ease in after you let go of the camera
+  const sp = Math.hypot(s.vx, s.vz), grounded = s.mode === MODE.GROUND || s.mode === MODE.GRIND;
+  if (grounded && sp > 2.5 && !s.deuce) {
+    const head = Math.atan2(s.vx, s.vz), diff = angWrap(head - INPUT.yaw);
+    // a full turnaround (halfpipe walls, a U-turn) only gets followed once you've kept going that way for a moment
+    if (Math.abs(diff) > 2.2) AUTOCAM.rev += dt; else AUTOCAM.rev = 0;
+    if (Math.abs(diff) <= 2.2 || AUTOCAM.rev > 1.1) {
+      const rate = Math.min(2.4, 0.6 + sp * 0.12) * AUTOCAM.w;
+      INPUT.yaw += Math.max(-rate * dt, Math.min(rate * dt, diff * Math.min(1, dt * 2.2)));
+    }
+  }
+  INPUT.pitch += (-0.14 - INPUT.pitch) * Math.min(1, dt * 1.2 * AUTOCAM.w);
+}

@@ -39,6 +39,7 @@ addEventListener('mousemove', (e) => {
   if (!INPUT.locked || !INPUT.enabled) return;
   const k = 0.0022 * SETTINGS.sens;
   INPUT.yaw -= e.movementX * k;
+  if (Math.abs(e.movementX) + Math.abs(e.movementY) > 1) INPUT.lookAt = performance.now();
   INPUT.pitch = clampPitch(INPUT.pitch - e.movementY * k * (SETTINGS.invertY ? -1 : 1));
 });
 document.addEventListener('pointerlockchange', () => { INPUT.locked = document.pointerLockElement === $('#stage canvas'); onLockChange(); });
@@ -89,6 +90,7 @@ function sampleInput(dt) {
       INPUT.usingPad = true;
       mx += lx; my += Math.max(0, -ly);
       const s = 2.6 * SETTINGS.sens * dt;
+      if (rx || ry) INPUT.lookAt = performance.now();
       INPUT.yaw -= rx * s * 1.25; INPUT.pitch = clampPitch(INPUT.pitch - ry * s * 0.8 * (SETTINGS.invertY ? -1 : 1));
       const newly = pb & ~padPrev; INPUT.pressQueue |= newly; btn |= pb;
     }

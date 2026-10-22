@@ -246,6 +246,7 @@ function cameraFrame(dt, view) {
     updateCamera(R, dt, v, { yaw: INPUT.yaw + Math.min(t, 2) * 0.12, pitch: -0.45, dist: 3 + Math.min(t, 2) * 1.2 });
     return;
   }
+  autoFollow(dt, tgt);
   updateCamera(R, dt, v, { yaw: INPUT.yaw, pitch: INPUT.pitch });
 }
 
