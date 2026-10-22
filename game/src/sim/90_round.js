@@ -38,7 +38,30 @@ function createRound(cfg, rng = {}) {
   };
   if (A.init) A.init(R);
   if (R.free) R.zoneNow = { x: 0, z: 0, r: 999 }; // free ride: no squeeze, no clock, no damage, no pickups
-  const respawn = (s) => { // free ride: falling off the map just drops you back in at a spawn point
+  // free ride on arenas without a ground floor (rooftops, the pier): open air and water are walled off, invisibly.
+  // Nobody can roll, ollie or get pushed off the edge of a structure.
+  let probeY = 0;
+  const solidBelow = (x, z) => groundAt(W, x, z, probeY) > W.killY + 1.5;
+  const keepOnMap = (s) => {
+    probeY = Math.max(s.y, s.fy0) + 1.2;
+    if (!solidBelow(s.x, s.z)) {
+      if (solidBelow(s.x, s.fz0)) { s.z = s.fz0; s.vz = -s.vz * 0.2; }
+      else if (solidBelow(s.fx0, s.z)) { s.x = s.fx0; s.vx = -s.vx * 0.2; }
+      else { s.x = s.fx0; s.z = s.fz0; s.vx = -s.vx * 0.2; s.vz = -s.vz * 0.2; }
+    }
+    // never sink into the edge of a deck or ramp you're coming down onto (or were just pushed back over)
+    if (s.mode === MODE.AIR && s.vy <= 0) { const g = groundAt(W, s.x, s.z, Math.max(s.y, s.fy0) + 0.3); if (g > s.y - 0.02 && g - s.y < 1.2) { s.y = g; s.vy = 0; } }
+  };
+
+  // …and if anything still slips through (a plank end, a shove), an invisible net puts you back where you last rode
+  const netCatch = (s) => {
+    if (s.mode === MODE.GROUND && R.tick % 20 === 0) { s.safe = s.safe1 || [s.x, s.y, s.z]; s.safe1 = [s.x, s.y, s.z]; }
+    if (!s.safe || s.mode === MODE.GROUND || s.y > s.safe[1] - 1.2) return;
+    probeY = s.y + 0.1; if (solidBelow(s.x, s.z)) return;
+    s.x = s.safe[0]; s.y = s.safe[1]; s.z = s.safe[2]; s.vx = 0; s.vy = 0; s.vz = 0; s.mode = MODE.GROUND; s.trick = null; s.rail = null; s.fell = false;
+    R.netCatches = (R.netCatches || 0) + 1; s.netTick = R.tick; if (R.netLog) R.netLog.push(`${s.x.toFixed(0)},${s.z.toFixed(0)}@${s.safe[1].toFixed(1)}`);
+  };
+  const respawn = (s) => { // last-resort safety net // free ride: falling off the map just drops you back in at a spawn point
     const sp = W.spawns[Math.floor(RNG() * W.spawns.length)];
     s.x = sp[0]; s.z = sp[1]; s.y = groundAt(W, s.x, s.z, 50); if (s.y < -1e8) s.y = 0;
     s.vx = 0; s.vy = 0; s.vz = 0; s.fell = false; s.mode = MODE.GROUND; s.hp = 100; s.deuce = null; s.slipT = 0; s.trick = null; s.rail = null;
@@ -84,10 +107,12 @@ function createRound(cfg, rng = {}) {
         s.press = s.btn & ~s.prevBtn;
       }
       if (R.free) { // free ride: just skating (and the occasional deuce)
+        for (const s of sk) { s.fx0 = s.x; s.fz0 = s.z; s.fy0 = s.y; s.fm0 = s.mode; }
         for (const s of sk) stepSkater(s, W, R.t);
         separateSkaters(sk);
+        if (!W.floor) for (const s of sk) { keepOnMap(s); netCatch(s); }
         stepDeuces(R);
-        for (const s of sk) { if (s.fell) respawn(s); s.hp = 100; s.prevBtn = s.btn; recordHist(s, R.tick); }
+        for (const s of sk) { if (s.fell) { R.respawns = (R.respawns || 0) + 1; s.lastRespawn = R.tick; respawn(s); } s.hp = 100; s.prevBtn = s.btn; recordHist(s, R.tick); }
         return null;
       }
       // pickup waves (telegraphed ahead) and the announcer's beats

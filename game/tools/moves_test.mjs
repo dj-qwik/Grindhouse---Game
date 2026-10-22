@@ -89,5 +89,12 @@ const run = (R, ticks, fn) => { for (let k = 0; k < ticks; k++) { const inp = { 
   ok(slips.length === 1 && slipped > 100, 'rolling over it spins the rider out for ~2 s', `${(slipped / 60).toFixed(2)} s`)
   ok(R.poops.length === 0, 'it shrinks away within 5 s of landing', `${R.poops.length} left at ${(R.t - p.t).toFixed(1)} s`)
 }
+// 11) free ride: no clock, no fighting, and nobody ever falls off the map (invisible edge walls + net)
+for (const key of ['rooftop', 'boardwalk']) {
+  const S3 = createSim({ seed: 1 })
+  const R = S3.createRound({ key, seed: 99, players: Array.from({ length: 8 }, (_, i) => ({ i, skill: 0.75 })), free: true })
+  let atk = 0, won = null; for (let k = 0; k < 60 * 90; k++) { won = R.step({}) || won; for (const q of R.sk) if (q.atk) atk++ }
+  ok(!won && atk === 0 && !R.respawns && R.sk.every((q) => q.alive && q.hp === 100), `free ride on ${key}: 90 s, no fights, nobody fell`, `net catches ${R.netCatches || 0}`)
+}
 if (fail) { console.log(`${fail} move check(s) failed`); process.exit(1) }
 console.log('moves ok')

@@ -143,8 +143,11 @@ function freeRideBot(R, s) {
       const fx = DM.sin(fy || 0), fz = DM.cos(fy || 0);
       B.goal = [p.cx + fx * (p.d || 4) * 0.8, p.cz + fz * (p.d || 4) * 0.8];
     } else { const a = RNG() * TAU, r = RNG() * W.half * 0.7; B.goal = [DM.sin(a) * r, DM.cos(a) * r]; }
+    // only ride at somewhere that has something to land on (rooftops / the pier have open air between them)
+    if (!W.floor && groundAt(W, B.goal[0], B.goal[1], 60) < W.killY + 1.5) B.goal = null;
     B.chill = RNG() < 0.15 ? 1 + RNG() * 2 : 0; // sometimes just roll along for a bit
   }
+  if (!B.goal) { B.think = 0; B.goal = [s.x + DM.sin(s.yaw) * 4, s.z + DM.cos(s.yaw) * 4]; }
   let gx = B.goal[0], gz = B.goal[1];
   if (B.unstuck > 0) { B.unstuck -= DT; gx = s.x + DM.sin(B.wander) * 10; gz = s.z + DM.cos(B.wander) * 10; }
   const mdx = gx - s.x, mdz = gz - s.z, md = hyp(mdx, mdz);
