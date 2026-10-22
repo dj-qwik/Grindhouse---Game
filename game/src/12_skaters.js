@@ -190,7 +190,7 @@ function poseRig(r, s, dt, view) {
   const side = V3().set(Math.sin(twist), 0, Math.cos(twist));
   const shL = V3().copy(sh).addScaledVector(side, 0.2), shR = V3().copy(sh).addScaledVector(side, -0.2);
   let hR, hL;
-  const wid = s.alive ? (s.slot === 1 && s.ranged ? s.ranged : s.melee || 'bat') : null;
+  const wid = s.alive && !(ROUND && ROUND.free) ? (s.slot === 1 && s.ranged ? s.ranged : s.melee || 'bat') : null;
   const ranged = wid && AIM_IDS[wid];
   if (ranged) {
     hR = V3().copy(sh).addScaledVector(aimDir, 0.48 - r.recoil * 0.12).addScaledVector(side, -0.05);

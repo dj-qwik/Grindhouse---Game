@@ -33,10 +33,17 @@ function createRound(cfg, rng = {}) {
   const tieRank = new Map(tieOrder.map((i, k) => [i, k]));
   const R = {
     key: cfg.key, def: A, arena: W, W, sk, tick: 0, t: 0, proj: [], fires: [], picks: [], nextId: 1, dying: [],
-    events: [], poops: [], wave: 0, lastPulse: -9, winner: null, firstBlood: false, said: {}, zoneNow: zoneAt(W, 0), tieOrder, variant, done: false,
+    events: [], poops: [], free: !!cfg.free, wave: 0, lastPulse: -9, winner: null, firstBlood: false, said: {}, zoneNow: zoneAt(W, 0), tieOrder, variant, done: false,
     get alive() { let n = 0; for (const s of sk) if (s.alive) n++; return n; },
   };
   if (A.init) A.init(R);
+  if (R.free) R.zoneNow = { x: 0, z: 0, r: 999 }; // free ride: no squeeze, no clock, no damage, no pickups
+  const respawn = (s) => { // free ride: falling off the map just drops you back in at a spawn point
+    const sp = W.spawns[Math.floor(RNG() * W.spawns.length)];
+    s.x = sp[0]; s.z = sp[1]; s.y = groundAt(W, s.x, s.z, 50); if (s.y < -1e8) s.y = 0;
+    s.vx = 0; s.vy = 0; s.vz = 0; s.fell = false; s.mode = MODE.GROUND; s.hp = 100; s.deuce = null; s.slipT = 0; s.trick = null; s.rail = null;
+    s.yaw = sp[2] ?? yawOf(-s.x, -s.z);
+  };
   const rank = (a, b) => (b.hpPrev - a.hpPrev) || (b.kills - a.kills) || (b.dmg - a.dmg) || (tieRank.get(a.i) - tieRank.get(b.i));
   const rankLive = (a, b) => (b.hp - a.hp) || (b.kills - a.kills) || (b.dmg - a.dmg) || (tieRank.get(a.i) - tieRank.get(b.i));
 
@@ -72,7 +79,16 @@ function createRound(cfg, rng = {}) {
         if (!s.alive) inputs[s.i] = p;
         const u = unpackInput(p);
         s.mx = u.mx; s.my = u.my; s.aimYaw = u.yaw; s.aimPitch = u.pitch; s.lag = u.lag;
-        s.btn = s.alive ? u.btn : 0; s.press = s.btn & ~s.prevBtn;
+        s.btn = s.alive ? u.btn : 0;
+        if (R.free) s.btn &= ~(BTN.attack | BTN.throw);
+        s.press = s.btn & ~s.prevBtn;
+      }
+      if (R.free) { // free ride: just skating (and the occasional deuce)
+        for (const s of sk) stepSkater(s, W, R.t);
+        separateSkaters(sk);
+        stepDeuces(R);
+        for (const s of sk) { if (s.fell) respawn(s); s.hp = 100; s.prevBtn = s.btn; recordHist(s, R.tick); }
+        return null;
       }
       // pickup waves (telegraphed ahead) and the announcer's beats
       while (R.wave < PICKUP_WAVES.length && R.t >= PICKUP_WAVES[R.wave].t - TELEGRAPH) spawnWave(R, PICKUP_WAVES[R.wave++]);

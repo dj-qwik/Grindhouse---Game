@@ -7,10 +7,10 @@ function phaseLabel(t) { return t < WARMUP ? 'WARM-UP' : t < 12 ? 'SCRAMBLE' : t
 function updateHud(R, dt) {
   const me = R.sk[viewSeat()], mine = R.sk[GAME.me], t = R.t;
   const left = Math.max(0, Math.ceil(60 - t - 1e-9));
-  setText('hTime', GAME.phase === 'count' ? '60' : String(left));
-  const tc = $('#hTime'); if (tc) tc.classList.toggle('hot', left <= 10 && GAME.phase === 'play');
-  setText('hPhase', GAME.phase === 'count' ? 'GET READY' : R.winner ? 'FINISHED' : phaseLabel(t));
-  setText('hAlive', String(R.alive));
+  setText('hTime', R.free ? '∞' : GAME.phase === 'count' ? '60' : String(left));
+  const tc = $('#hTime'); if (tc) tc.classList.toggle('hot', !R.free && left <= 10 && GAME.phase === 'play');
+  setText('hPhase', GAME.phase === 'count' ? 'GET READY' : R.free ? 'FREE RIDE · ESC TO LEAVE' : R.winner ? 'FINISHED' : phaseLabel(t));
+  setText('hAlive', String(R.alive)); setText('hAliveL', R.free ? 'skating' : 'alive'); document.body.classList.toggle('freeride', !!R.free);
   if (!me) return;
   setText('hName', me.i === GAME.me ? (GAME.myName || 'You') : 'Watching · ' + nameOf(me.i));
   const hp = Math.max(0, me.hp), hpT = Math.ceil(hp);
@@ -30,7 +30,8 @@ function updateHud(R, dt) {
   ];
   setHtml('hSlots', sl.map(([k, n, on, extra]) => `<div class="slot${on ? ' on' : ''}"><small>${esc(k)}</small><b>${esc(n)}</b>${extra ? `<span class="ammo">${esc(extra)}</span>` : ''}</div>`).join(''));
   let hint = '';
-  if (me.alive && me.i === GAME.me && t < 7) hint = `${keyLabel(KEYMAP.jump)} ollie · ${keyLabel(KEYMAP.attack)} attack · ${keyLabel(KEYMAP.trick)} trick in the air · ${keyLabel(KEYMAP.throw)} throw · roll over weapons to grab them`;
+  if (R.free && me.i === GAME.me && t < 7) hint = `${keyLabel(KEYMAP.jump)} ollie (hold to charge) · ${keyLabel(KEYMAP.trick)} trick in the air · hit ramps and rails`;
+  else if (me.alive && me.i === GAME.me && t < 7) hint = `${keyLabel(KEYMAP.jump)} ollie · ${keyLabel(KEYMAP.attack)} attack · ${keyLabel(KEYMAP.trick)} trick in the air · ${keyLabel(KEYMAP.throw)} throw · roll over weapons to grab them`;
   setText('hHint', hint || ' ');
   $('#hHint').style.visibility = hint ? 'visible' : 'hidden';
   // trick banking popups
@@ -41,7 +42,7 @@ function updateHud(R, dt) {
   // low health heartbeat + vignette; zone warning
   $('#vig').style.opacity = me.alive && hp < 35 ? String(0.35 + (35 - hp) / 60 + Math.sin(performance.now() / 160) * 0.1) : '0';
   if (me.alive && hp < 30 && me.i === GAME.me) { HUD.heartT -= dt; if (HUD.heartT <= 0) { HUD.heartT = 0.75; playSfx('heartbeat', null, null, null, 0.8); } }
-  const Z = R.zoneNow || SIM0.zoneAt(R.W, t), out = me.alive && Math.hypot(me.x - Z.x, me.z - Z.z) > Z.r && t > 12;
+  const Z = R.zoneNow || SIM0.zoneAt(R.W, t), out = !R.free && me.alive && Math.hypot(me.x - Z.x, me.z - Z.z) > Z.r && t > 12;
   $('#zw').style.opacity = out ? '1' : '0'; $('#zt').style.opacity = out ? '1' : '0';
   drawMinimap(R, me);
 }
@@ -65,8 +66,10 @@ function drawMinimap(R, me) {
   }
   // zone
   const Z = R.zoneNow || SIM0.zoneAt(R.W, R.t);
+  if (!R.free) {
   g.strokeStyle = '#FF5C69'; g.lineWidth = 4; g.beginPath(); g.arc(X(Z.x), Y(Z.z), Z.r * k, 0, 7); g.stroke();
   const Zn = SIM0.zoneAt(R.W, R.t + 8); g.setLineDash([6, 6]); g.lineWidth = 2; g.strokeStyle = '#FFFFFF88'; g.beginPath(); g.arc(X(Zn.x), Y(Zn.z), Zn.r * k, 0, 7); g.stroke(); g.setLineDash([]);
+  }
   // pickups (ready ones)
   for (const p of R.picks) { if (R.t < p.t0) continue; g.fillStyle = RARITY_COL[p.rarity] || '#fff'; g.beginPath(); g.arc(X(p.x), Y(p.z), 3, 0, 7); g.fill(); }
   // threat pings: enemies close by, attacking, or recently shooting

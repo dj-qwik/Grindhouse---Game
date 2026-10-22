@@ -2,7 +2,7 @@
 let ROUND = null; // the round being drawn (practice, online follower, attract mode or a replay)
 const GAME = {
   screen: 'home', mode: 'attract', phase: 'menu', me: 0, players: [], look: +(store.get('gh_look') || 0), myName: store.get('gh_name') || '',
-  arena: store.get('gh_arena') || 'random', bots: +(store.get('gh_bots') || 7), diff: store.get('gh_diff') || 'hard',
+  arena: store.get('gh_arena') || 'random', bots: +(store.get('gh_bots') || 7), diff: store.get('gh_diff') || 'hard', pmode: store.get('gh_pmode') === 'free' ? 'free' : 'dm',
   acc: 0, countT: 0, doneT: 0, inputs: [], seed: 0, key: null, myDeath: null, lastKill: null, spec: -1, specMode: 'follow', prev: new Map(),
   hist: [], shown: null, replay: null, results: null, attract: null,
 };
@@ -45,13 +45,14 @@ function practiceCard() {
   const arenas = ARENA_LIST();
   return `<div class="card">
     <div class="row" style="justify-content:space-between"><h2>Practice</h2><span class="label">free · offline · bots</span></div>
+    <div style="display:grid;gap:6px"><span class="label">Mode</span><div class="seg">${[['dm', 'Deathmatch', 'last skater standing · 60 s'], ['free', 'Free ride', 'no timer · no fighting · bots just skate']].map(([k, l, d]) => `<button class="${k === GAME.pmode ? 'sel' : ''}" data-pmode="${k}">${l}<small>${d}</small></button>`).join('')}</div></div>
     <div style="display:grid;gap:6px"><span class="label">Arena</span><div class="arenas">
       <button class="arena-pick${GAME.arena === 'random' ? ' sel' : ''}" data-arena="random"><b>RANDOM</b><small>any of the ${arenas.length}</small></button>
       ${arenas.map((a) => `<button class="arena-pick${GAME.arena === a.key ? ' sel' : ''}" data-arena="${a.key}"><b>${esc(a.name.toUpperCase())}</b><small>${esc(a.blurb || '')}</small></button>`).join('')}
     </div></div>
     <div class="cols">
-      <div style="display:grid;gap:6px"><span class="label">Opponents</span><div class="seg">${[1, 3, 5, 7].map((n) => `<button class="${n === GAME.bots ? 'sel' : ''}" data-bots="${n}">${n}<small>bot${n > 1 ? 's' : ''}</small></button>`).join('')}</div></div>
-      <div style="display:grid;gap:6px"><span class="label">Bot skill</span><div class="seg">${[['easy', 'Easy'], ['hard', 'Hard']].map(([k, l]) => `<button class="${k === GAME.diff ? 'sel' : ''}" data-diff="${k}">${l}</button>`).join('')}</div></div>
+      <div style="display:grid;gap:6px"><span class="label">${GAME.pmode === 'free' ? 'Other skaters' : 'Opponents'}</span><div class="seg">${[1, 3, 5, 7].map((n) => `<button class="${n === GAME.bots ? 'sel' : ''}" data-bots="${n}">${n}<small>bot${n > 1 ? 's' : ''}</small></button>`).join('')}</div></div>
+      ${GAME.pmode === 'free' ? '' : `<div style="display:grid;gap:6px"><span class="label">Bot skill</span><div class="seg">${[['easy', 'Easy'], ['hard', 'Hard']].map(([k, l]) => `<button class="${k === GAME.diff ? 'sel' : ''}" data-diff="${k}">${l}</button>`).join('')}</div></div>`}
     </div>
     ${skaterPicker()}
     <div class="row"><button class="btn primary big" id="practiceGo">Drop in</button><button class="btn ghost" id="back">Back</button></div>
@@ -144,16 +145,18 @@ function startPractice() {
   const players = Array.from({ length: n }, (_, i) => ({ i, look: looks[i], name: i === 0 ? (GAME.myName || 'You') : BOT_NAMES[(i + seed) % BOT_NAMES.length], human: i === 0,
     skill: GAME.diff === 'easy' ? 0.5 + Math.random() * 0.12 : 0.72 + Math.random() * 0.1 }));
   const sim = createSim({ fx: FX_ENV, seed: 1 });
-  const R = sim.createRound({ key, seed, players, botSalt: 'practice' });
+  const free = GAME.pmode === 'free';
+  const R = sim.createRound({ key, seed, players, botSalt: 'practice', free });
   bindRound(R, players, 'practice', 0);
-  GAME.key = key; GAME.seed = seed; GAME.inputs = []; GAME.replaySrc = { kind: 'practice', key, seed, players, inputs: GAME.inputs };
+  GAME.key = key; GAME.seed = seed; GAME.inputs = []; GAME.replaySrc = free ? null : { kind: 'practice', key, seed, players, inputs: GAME.inputs };
+  if (free) GAME.inputs = { push() {} }; // nothing to replay in free ride; don't keep an ever-growing log
   beginCountdown(3);
 }
 function beginCountdown(sec) {
   GAME.screen = 'match'; GAME.phase = 'count'; GAME.countT = sec; GAME.acc = 0; GAME.results = null;
   showOverlay(''); hudShow(true); INPUT.enabled = true; requestLock();
   const A = ROUND.def;
-  hudExtra(`<div class="prestart" id="pre"><div class="a">${esc(A.name.toUpperCase())}</div><div class="b">${esc(A.finale || '')}</div><div class="b" style="background:var(--ink)">Last skater standing · 60 s cap · ties: health › kills › damage › seeded order</div></div>
+  hudExtra(`<div class="prestart" id="pre"><div class="a">${esc(A.name.toUpperCase())}</div><div class="b">${esc(A.finale || '')}</div><div class="b" style="background:var(--ink)">${ROUND.free ? 'Free ride · no timer · no fighting · Esc to leave' : 'Last skater standing · 60 s cap · ties: health › kills › damage › seeded order'}</div></div>
     <div class="countdown" id="cdn"></div>${lockHint()}`);
   musicMode('match'); musicStart();
 }
@@ -368,6 +371,7 @@ $('#ov').addEventListener('click', (e) => {
   if (t.id === 'goPractice') { GAME.screen = 'practice'; showOverlay(practiceCard()); }
   else if (t.dataset.arena) { GAME.arena = t.dataset.arena; store.set('gh_arena', GAME.arena); showOverlay(practiceCard()); }
   else if (t.dataset.bots) { GAME.bots = +t.dataset.bots; store.set('gh_bots', GAME.bots); showOverlay(practiceCard()); }
+  else if (t.dataset.pmode) { GAME.pmode = t.dataset.pmode; store.set('gh_pmode', GAME.pmode); showOverlay(practiceCard()); }
   else if (t.dataset.diff) { GAME.diff = t.dataset.diff; store.set('gh_diff', GAME.diff); showOverlay(practiceCard()); }
   else if (t.dataset.look) { GAME.look = +t.dataset.look; store.set('gh_look', GAME.look); showOverlay(GAME.screen === 'practice' ? practiceCard() : $('#ov').innerHTML.replace(/class="sk sel"/g, 'class="sk"').replace(`class="sk" data-look="${GAME.look}"`, `class="sk sel" data-look="${GAME.look}"`)); }
   else if (t.id === 'practiceGo') startPractice();
@@ -397,7 +401,7 @@ $('#hud').addEventListener('click', (e) => {
 });
 $('#stage').addEventListener('click', () => { if (GAME.screen === 'match' && INPUT.enabled && !INPUT.locked) requestLock(); });
 addEventListener('keydown', (e) => {
-  if (e.code === 'Escape' && GAME.screen === 'match' && GAME.mode === 'practice' && GAME.phase === 'play') { /* pointer lock releases by itself; show the leave option */ hudExtra(lockHint() + '<div class="spec" style="bottom:50%"><span>Paused input</span><button class="btn small hot" id="quitMatch">Leave practice</button></div>'); }
+  if (e.code === 'Escape' && GAME.screen === 'match' && GAME.mode === 'practice' && GAME.phase === 'play') { /* pointer lock releases by itself; show the leave option */ hudExtra(lockHint() + '<div class="spec" style="bottom:50%"><span>Paused input</span><button class="btn small hot" id="quitMatch">' + (ROUND && ROUND.free ? 'Leave free ride' : 'Leave practice') + '</button></div>'); }
   if (GAME.spec >= 0 && (e.code === 'ArrowRight' || e.code === 'KeyD')) cycleSpec(1);
   if (GAME.spec >= 0 && (e.code === 'ArrowLeft' || e.code === 'KeyA')) cycleSpec(-1);
 });

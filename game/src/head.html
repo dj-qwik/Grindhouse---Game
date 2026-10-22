@@ -177,6 +177,7 @@ body.playing #top>*{pointer-events:none}
 #loading{position:fixed;inset:0;display:grid;place-items:center;z-index:50;background:var(--ink);font:28px var(--display);color:var(--cream)}
 body[data-err]:after{content:attr(data-err);position:fixed;left:10px;bottom:10px;background:var(--coral);color:var(--ink);padding:8px 12px;border-radius:6px;z-index:99;font-weight:800}
 #touch{display:none}
+body.freeride #hBar,body.freeride .hweap{display:none}
 </style>
 </head>
 <body>
@@ -192,7 +193,7 @@ body[data-err]:after{content:attr(data-err);position:fixed;left:10px;bottom:10px
 <div id="hud" hidden>
   <canvas id="minimap" width="340" height="340"></canvas>
   <div class="hclock"><div class="t" id="hTime">60</div><div class="sub" id="hPhase">GO</div></div>
-  <div class="hsurv"><span id="hAlive">8</span><small>alive</small></div>
+  <div class="hsurv"><span id="hAlive">8</span><small id="hAliveL">alive</small></div>
   <div class="hfeed" id="hFeed"></div>
   <svg class="hitmark" id="hitmark" viewBox="-13 -13 26 26"><g stroke="#FF5C69" stroke-width="3" stroke-linecap="round"><line x1="-11" y1="-11" x2="-5" y2="-5"/><line x1="11" y1="-11" x2="5" y2="-5"/><line x1="-11" y1="11" x2="-5" y2="5"/><line x1="11" y1="11" x2="5" y2="5"/></g></svg>
   <div class="dmgdir" id="dmgdir"></div>

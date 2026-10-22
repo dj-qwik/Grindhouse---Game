@@ -3,6 +3,7 @@
 // the same game as humans (same inputs, same rules): scavenge, keep inside the zone, fight, trick for Adrenaline.
 // Skill (0.55–0.82) sets aim error, reaction time and how often they trick. Cash matches never contain bots.
 function botInput(R, s) {
+  if (R.free) return freeRideBot(R, s);
   const B = s.bot || (s.bot = { tgt: -1, think: 0, stuck: 0, unstuck: 0, wander: RNG() * TAU, pick: -1, aimErr: 0, hold: 0, jump: 0, trickDir: 0, fireT: 0, los: false, lastSwing: 0, retreat: 0, side: 1, cruise: null });
   const t = R.t, Z = zoneAt(R.arena, t + 4); // plan for where the zone is going
   let btn = 0, mx = 0, my = 0;
@@ -122,4 +123,48 @@ function botInput(R, s) {
     }
   }
   return { mx, my, yaw: aimYaw, pitch, btn, lag: 0 };
+}
+
+// ── free ride: no fighting at all. Bots pick a ramp, quarter pipe or open spot, skate at it, ollie and trick
+// off whatever they launch from, and occasionally just cruise around.
+function freeRideBot(R, s) {
+  const W = R.W, B = s.bot || (s.bot = { goal: null, think: 0, stuck: 0, unstuck: 0, wander: RNG() * TAU, jump: 0, trickDir: 0, chill: 0 });
+  let btn = 0, mx = 0, my = 0;
+  const sp = hyp(s.vx, s.vz);
+  B.think -= DT;
+  const reached = B.goal && hyp(B.goal[0] - s.x, B.goal[1] - s.z) < 2.5;
+  if (!B.goal || reached || B.think <= 0) {
+    B.think = 3.5 + RNG() * 3;
+    const ramps = W.prims.filter((p) => !p.gone && (p.type === 'slope' || p.type === 'qp'));
+    if (ramps.length && RNG() < 0.7) {
+      const p = ramps[Math.floor(RNG() * ramps.length)];
+      // approach up the ramp: aim through it along its rising direction so we launch off the lip
+      const fy = p.type === 'qp' ? p.yaw : (p.h1 >= p.h0 ? p.yaw : p.yaw + PI);
+      const fx = DM.sin(fy || 0), fz = DM.cos(fy || 0);
+      B.goal = [p.cx + fx * (p.d || 4) * 0.8, p.cz + fz * (p.d || 4) * 0.8];
+    } else { const a = RNG() * TAU, r = RNG() * W.half * 0.7; B.goal = [DM.sin(a) * r, DM.cos(a) * r]; }
+    B.chill = RNG() < 0.15 ? 1 + RNG() * 2 : 0; // sometimes just roll along for a bit
+  }
+  let gx = B.goal[0], gz = B.goal[1];
+  if (B.unstuck > 0) { B.unstuck -= DT; gx = s.x + DM.sin(B.wander) * 10; gz = s.z + DM.cos(B.wander) * 10; }
+  const mdx = gx - s.x, mdz = gz - s.z, md = hyp(mdx, mdz);
+  const aimYaw = md > 0.1 ? yawOf(mdx, mdz) : s.yaw;
+  if (B.chill > 0) { B.chill -= DT; my = sp < 7.5 ? 1 : 0; }
+  else if (md > 0.8) {
+    const ux = mdx / md, uz = mdz / md, sy = DM.sin(aimYaw), cy = DM.cos(aimYaw);
+    my = ux * sy + uz * cy; mx = -(ux * cy) + uz * sy;
+    if (md > 14 && s.mode === MODE.GROUND && s.skill > 0.6) btn |= BTN.boost;
+  }
+  if (s.mode !== MODE.AIR && sp < 2 && B.chill <= 0) { B.stuck += DT; if (B.stuck > 0.45) { B.stuck = 0; B.unstuck = 0.8; B.wander = RNG() * TAU; B.jump = 8; B.goal = null; } }
+  else B.stuck = 0;
+  // ollies on the flat, and a charged pop as they hit a ramp
+  if (B.jump > 0) { B.jump--; btn |= BTN.jump; }
+  else if (s.mode === MODE.GROUND && sp > 6 && RNG() < 0.012) B.jump = 3 + Math.floor(RNG() * 14);
+  else if (s.mode === MODE.GROUND && s.onPrim && s.ny < 0.97 && sp > 6 && RNG() < 0.05) B.jump = 10 + Math.floor(RNG() * 10);
+  // tricks whenever there's air to land them
+  const below = s.mode === MODE.AIR ? groundAt(W, s.x, s.z, s.y + 0.1) : s.y, h = Math.max(0, s.y - below);
+  const tLand = (s.vy + Math.sqrt(Math.max(0, s.vy * s.vy + 2 * G * h))) / G;
+  if (s.mode === MODE.AIR && !s.trick && s.airT > 0.04 && tLand > 0.6 && RNG() < 0.25) { btn |= BTN.trick; B.trickDir = tLand > 0.85 ? Math.floor(RNG() * 4) : Math.floor(RNG() * 2); }
+  if ((s.btn & BTN.trick) && s.mode === MODE.AIR) { mx = B.trickDir === 0 ? -1 : B.trickDir === 1 ? 1 : 0; my = B.trickDir === 2 ? -1 : B.trickDir === 3 ? 1 : my; }
+  return { mx, my, yaw: aimYaw, pitch: 0, btn, lag: 0 };
 }
