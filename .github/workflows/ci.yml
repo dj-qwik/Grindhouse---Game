@@ -25,6 +25,12 @@ jobs:
           cd /tmp/wallet-debug && git init -q && git checkout -q -b ci-wallet-debug && git add -A
           git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "wallet debug build ${GITHUB_SHA}"
           git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-wallet-debug
+      - name: build contracts for the settlement suite
+        working-directory: contracts
+        run: |
+          git clone -q --depth 1 https://github.com/foundry-rs/forge-std lib/forge-std
+          git clone -q --depth 1 --branch v5.1.0 https://github.com/OpenZeppelin/openzeppelin-contracts lib/openzeppelin-contracts
+          forge build
       - name: shared rules + settlement suites (single-round ledgers, co-signer refusals, refunds) on anvil
         shell: bash
         run: |
