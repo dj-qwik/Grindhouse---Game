@@ -60,9 +60,13 @@ function makeSkaterRig(look) {
   if (/stunt|leathers|courier/.test(L.style)) for (let k = 0; k < 2; k++) { const pd = ol(new T.Mesh(new T.SphereGeometry(0.085, 8, 6), toon('#22292B')), 0.015); pd.scale.set(1, 1.2, 1); root.add(pd); kneePads.push(pd); }
   let pack = null;
   if (/courier/.test(L.style)) { pack = ol(new T.Mesh(new T.BoxGeometry(0.2, 0.34, 0.3), toon('#FF9B36')), 0.02); root.add(pack); }
+  // the hidden deuce: bare cheeks + trousers bunched at the knees (shown only mid-squat)
+  const butt = new T.Group(); root.add(butt); butt.visible = false;
+  for (const z of [-0.075, 0.075]) { const ch = ol(new T.Mesh(new T.SphereGeometry(0.105, 10, 8), skin), 0.02); ch.position.z = z; butt.add(ch); }
+  const bunch = [0, 1].map(() => { const b = ol(new T.Mesh(new T.TorusGeometry(0.085, 0.045, 6, 12), trim), 0.015); b.visible = false; root.add(b); return b; });
   // weapon slot in the right hand
   const hold = new T.Group(); root.add(hold);
-  const r = { root, board, deck, parts: { thighL, thighR, shinL, shinR, footL, footR, torso, uaL, uaR, faL, faR, handL, handR }, head, hold, eyes, mouth, look, brows, pads: kneePads, pack,
+  const r = { root, board, deck, parts: { thighL, thighR, shinL, shinR, footL, footR, torso, uaL, uaR, faL, faR, handL, handR }, head, hold, eyes, mouth, look, brows, pads: kneePads, pack, butt, bunch, skinM: skin, legM: L.style.includes('overalls') ? body : trim,
     weapon: null, weaponId: null, phase: Math.random() * 6, crouch: 0, land: 0, lean: 0, lastYaw: 0, flip: 0, recoil: 0, swing: 0, throwT: 0, hitT: 0, lastHp: 100, lastAmmo: 0, tumble: 0, boardOff: null, alive: true, shade: 1 };
   return r;
 }
@@ -118,7 +122,12 @@ function poseRig(r, s, dt, view) {
   root.position.set(view.x, view.y, view.z);
   const yaw = view.yaw;
   const yawRate = angWrap(yaw - r.lastYaw) / Math.max(dt, 1e-3); r.lastYaw = yaw;
-  root.rotation.set(0, yaw, 0);
+  // deuce choreography (sim phases): stop → step off and face away → pants down, squat → drop → stand, pants up → remount
+  const DT0 = s.deuce ? s.deuce.t : -1, sm = (u) => { u = Math.max(0, Math.min(1, u)); return u * u * (3 - 2 * u); };
+  const dw = DT0 < 0 ? 0 : DT0 < 2.5 ? sm((DT0 - 0.45) / 0.3) : 1 - sm((DT0 - 2.75) / 0.35);
+  const sq = DT0 < 0 ? 0 : DT0 < 2.5 ? sm((DT0 - 0.8) / 0.35) : 1 - sm((DT0 - 2.5) / 0.3);
+  const pantsDown = DT0 > 0.92 && DT0 < 2.62, pulling = (DT0 > 0.72 && DT0 < 1.05) || (DT0 > 2.42 && DT0 < 2.78);
+  root.rotation.set(0, yaw - dw * Math.PI / 2, 0);
   const sp = Math.hypot(s.vx, s.vz), air = s.mode === MODE.AIR, down = s.mode === MODE.DOWN || !s.alive;
   // timers
   if (s.hp < r.lastHp - 0.5) r.hitT = 0.3; r.lastHp = s.hp;
@@ -144,6 +153,7 @@ function poseRig(r, s, dt, view) {
     const nx = s.nx, nz = s.nz, f = Math.sin(yaw) * nx + Math.cos(yaw) * nz, sd = Math.cos(yaw) * nx - Math.sin(yaw) * nz;
     root.rotateX(Math.asin(Math.max(-1, Math.min(1, f)))); root.rotateZ(-Math.asin(Math.max(-1, Math.min(1, sd))));
   }
+  if (dw > 0) { B.rotation.y = dw * Math.PI / 2; B.position.set(0.05 * dw, 0, 0.5 * dw); }
   if (down) {
     r.tumble = Math.min(1, r.tumble + dt * 3.2);
     root.rotateX(-r.tumble * Math.PI / 2 * (s.alive ? 0.9 : 1)); root.position.y += 0.15 * (1 - r.tumble) + (s.alive ? 0.12 : 0.15);
@@ -155,6 +165,10 @@ function poseRig(r, s, dt, view) {
   const pushing = s.mode === MODE.GROUND && s.my > 0.3 && sp < 11.5 && s.manual <= 0 && s.charge < 0 && !down;
   if (pushing) { r.phase += dt * (5 + sp * 0.4); const ph = r.phase % (Math.PI * 2), k = Math.sin(ph); back.set(-0.22, Math.max(0.02, 0.12 + k * 0.12), -0.15 - Math.cos(ph) * 0.35); }
   if (s.manual > 0) { front.y += 0.1; }
+  if (dw > 0 || sq > 0) { // feet planted on the ground, shoulder-width; hips sink and push back into the squat
+    front.lerp(V3().set(0.06, 0.05, 0.19), dw); back.lerp(V3().set(0.06, 0.05, -0.19), dw);
+    hip.y = 0.98 - (0.98 - hip.y) * (1 - dw) - 0.47 * sq - 0.12 * dw * (1 - sq); hip.x -= 0.2 * sq;
+  }
   const hipL = V3().copy(hip).add(V3().set(0, 0, 0.11)), hipR = V3().copy(hip).add(V3().set(0, 0, -0.11));
   const bend = V3().set(1, 0.2, 0), kL = V3(), kR = V3();
   ik(hipL, front, RIG.l1, RIG.l2, bend, kL); ik(hipR, back, RIG.l1, RIG.l2, bend, kR);
@@ -162,13 +176,13 @@ function poseRig(r, s, dt, view) {
   P.footL.position.copy(front).add(V3().set(0.03, -0.03, 0)); P.footR.position.copy(back).add(V3().set(0.03, -0.03, 0));
   P.footL.rotation.set(0, Math.PI / 2 - 0.2, 0); P.footR.rotation.set(0, Math.PI / 2 + 0.2, 0);
   // torso + head: twist toward the aim (bible §11: independent upper-body aiming)
-  const twist = Math.max(-1.5, Math.min(1.5, angWrap(view.aimYaw - (yaw + Math.PI / 2))));
-  const chest = V3().copy(hip).add(V3().set(0.06 + r.lean * 0.5 + (s.manual > 0 ? -0.15 : 0), 0.52 - c * 0.08, 0));
-  P.torso.position.copy(hip).lerp(chest, 0.5).add(V3().set(0, 0.04, 0)); P.torso.rotation.set(0, twist * 0.6, -0.12 - c * 0.3 + r.lean * 0.6 - (r.hitT > 0 ? 0.3 : 0));
+  const twist = dw > 0 ? 0 : Math.max(-1.5, Math.min(1.5, angWrap(view.aimYaw - (yaw + Math.PI / 2))));
+  const chest = V3().copy(hip).add(V3().set(0.06 + r.lean * 0.5 + (s.manual > 0 ? -0.15 : 0) + 0.24 * sq, 0.52 - c * 0.08 - 0.07 * sq, 0));
+  P.torso.position.copy(hip).lerp(chest, 0.5).add(V3().set(0, 0.04, 0)); P.torso.rotation.set(0, twist * 0.6, -0.12 - c * 0.3 + r.lean * 0.6 - (r.hitT > 0 ? 0.3 : 0) - 0.45 * sq);
   r.head.position.copy(chest).add(V3().set(0.02, 0.27, 0)); r.head.rotation.set(0, twist * 0.95 + Math.PI / 2 - Math.PI / 2, -view.aimPitch * 0.5);
   r.head.rotation.y = twist; // face local +x then twist
   // expression: squint when hit or charged, wide when airborne
-  const sq = r.hitT > 0 ? 0.3 : s.adren >= 100 ? 0.5 : 1; r.eyes.forEach((e) => { e.scale.y = sq; }); r.mouth.scale.z = air ? 0.6 : 1; r.mouth.scale.y = r.hitT > 0 || air ? 2.5 : 1;
+  const eyeSq = r.hitT > 0 ? 0.3 : s.adren >= 100 ? 0.5 : 1; r.eyes.forEach((e) => { e.scale.y = eyeSq; }); r.mouth.scale.z = air ? 0.6 : 1; r.mouth.scale.y = r.hitT > 0 || air ? 2.5 : 1;
   // arms + weapon
   const aimDir = V3().set(Math.sin(view.aimYaw - yaw) * Math.cos(view.aimPitch), Math.sin(view.aimPitch), Math.cos(view.aimYaw - yaw) * Math.cos(view.aimPitch));
   const sh = V3().copy(chest).add(V3().set(0, 0.16, 0));
@@ -195,6 +209,12 @@ function poseRig(r, s, dt, view) {
     if (air || s.mode === MODE.GRIND) hR.addScaledVector(side, -0.25).y += 0.25;
   }
   if (s.adren >= 100 && s.alive && !ranged && !s.atk) hR.y += 0.1;
+  if (dw > 0) { // hands: at the waistband while the trousers go down / up, otherwise braced on the knees
+    const wL = V3().copy(hip).add(V3().set(-0.02, 0.06, 0.2)), wR = V3().copy(hip).add(V3().set(-0.02, 0.06, -0.2));
+    if (pulling) { const k = DT0 < 1.5 ? sm((DT0 - 0.72) / 0.33) : 1 - sm((DT0 - 2.42) / 0.36); wL.y -= 0.32 * k; wR.y -= 0.32 * k; wL.x += 0.05 * k; wR.x += 0.05 * k; hL = wL; hR = wR; }
+    else if (sq > 0.3) { hL.lerp(V3().copy(kL).add(V3().set(0.07, 0.06, 0)), sq); hR.lerp(V3().copy(kR).add(V3().set(0.07, 0.06, 0)), sq); }
+    else { hL.lerp(wL, dw); hR.lerp(wR, dw); }
+  }
   const eL = V3(), eR = V3();
   ik(shL, hL, RIG.a1, RIG.a2, V3().set(-0.3, -1, 0), eL); ik(shR, hR, RIG.a1, RIG.a2, V3().set(-0.3, -1, 0), eR);
   limbBetween(P.uaL, shL, eL); limbBetween(P.faL, eL, hL); limbBetween(P.uaR, shR, eR); limbBetween(P.faR, eR, hR);
@@ -210,7 +230,16 @@ function poseRig(r, s, dt, view) {
     r.hold.quaternion.setFromUnitVectors(V3().set(0, 0, 1), fwd);
     if (r.weapon.userData.saw) r.weapon.userData.saw.rotation.y += dt * 20;
   }
-  r.hold.visible = s.alive;
+  r.hold.visible = s.alive && dw === 0;
+  // trousers down: skin thighs, bare cheeks out back, cloth bunched around the knees
+  const pm = pantsDown ? r.skinM : r.legM; if (P.thighL.material !== pm) { P.thighL.material = pm; P.thighR.material = pm; }
+  r.butt.visible = pantsDown; r.bunch.forEach((b) => { b.visible = pantsDown; });
+  if (pantsDown) {
+    r.butt.position.copy(hip).add(V3().set(-0.1, -0.02, 0)); r.butt.rotation.set(0, 0, -0.45 * sq);
+    r.bunch[0].position.copy(kL).add(V3().set(0.0, 0.02, 0)); r.bunch[1].position.copy(kR).add(V3().set(0.0, 0.02, 0));
+    r.bunch[0].rotation.set(Math.PI / 2, 0, 0.6); r.bunch[1].rotation.set(Math.PI / 2, 0, 0.6);
+    if (DT0 > 1.0 && DT0 < 1.6) r.mouth.scale.y = 2.2; // strain
+  }
   // pads ride on the knees; the backpack sits on the back of the chest; brows angry when attacking
   if (r.pads.length) { r.pads[0].position.copy(kL).add(V3().set(0.07, 0, 0)); r.pads[1].position.copy(kR).add(V3().set(0.07, 0, 0)); }
   if (r.pack) { r.pack.position.copy(chest).add(V3().set(-0.22 * Math.cos(twist * 0.6), -0.12, 0.22 * Math.sin(twist * 0.6))); r.pack.rotation.set(0, twist * 0.6, -0.12 - c * 0.3); }

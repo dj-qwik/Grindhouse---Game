@@ -47,6 +47,7 @@ function clampPitch(p) { return Math.max(-1.0, Math.min(0.85, p)); }
 function markPress(code) {
   for (const [a, k] of Object.entries(KEYMAP)) if (k === code && BTN[a]) INPUT.pressQueue |= BTN[a];
   if (code === ALT_KEYS.brake) INPUT.pressQueue |= BTN.brake;
+  if (code === 'KeyP') INPUT.pressQueue |= BTN.deuce;
 }
 function requestLock() { const c = $('#stage canvas'); if (c && c.requestPointerLock && !INPUT.locked) { try { const p = c.requestPointerLock({ unadjustedMovement: true }); if (p && p.catch) p.catch(() => c.requestPointerLock()); } catch { c.requestPointerLock(); } } }
 function releaseLock() { if (document.pointerLockElement) document.exitPointerLock(); }
@@ -73,6 +74,7 @@ function sampleInput(dt) {
   if (act('fwd')) my += 1; if (act('left')) mx -= 1; if (act('right')) mx += 1;
   const has = (a) => act(a) || (a === 'brake' && keyDown(ALT_KEYS.brake));
   for (const a of ['boost', 'brake', 'jump', 'trick', 'attack', 'throw']) if (has(a)) btn |= BTN[a];
+  if (keyDown('KeyP')) btn |= BTN.deuce; // (not in any menu)
   if (btn & BTN.brake && !my && !mx) { /* brake in place */ }
   const pad = readPad(); INPUT.padHeld = 0;
   if (pad) {
@@ -80,7 +82,7 @@ function sampleInput(dt) {
     const lx = dz(ax[0] || 0), ly = dz(ax[1] || 0), rx = dz(ax[2] || 0), ry = dz(ax[3] || 0);
     let pb = 0;
     // A ollie · X trick/slam · RT or RB attack · B throw · LT brake (or pull the stick back)
-    if (b(0)) pb |= BTN.jump; if (b(2) || b(3)) pb |= BTN.trick; if (b(5) || b(7)) pb |= BTN.attack; if (b(1)) pb |= BTN.throw;
+    if (b(0)) pb |= BTN.jump; if (b(2)) pb |= BTN.trick; if (b(3)) pb |= BTN.deuce; if (b(5) || b(7)) pb |= BTN.attack; if (b(1)) pb |= BTN.throw;
     if (b(6) || ly > 0.6) pb |= BTN.brake; if (b(4)) pb |= BTN.boost;
     const any = Math.abs(lx) + Math.abs(ly) + Math.abs(rx) + Math.abs(ry) > 0 || pb;
     if (any) {

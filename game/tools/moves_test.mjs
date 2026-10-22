@@ -61,5 +61,33 @@ const run = (R, ticks, fn) => { for (let k = 0; k < ticks; k++) { const inp = { 
   run(R, 40, (k) => packInput({ yaw: 0, btn: k === 2 ? BTN.attack : 0 }))
   ok(o.hp < hp0 - 10, 'a bat swing hits the skater in front', `${hp0} → ${o.hp.toFixed(1)}`)
 }
+// 10) hidden deuce: stop, squat, drop; "Droppin a DEUCE!!!" when it lands on a fallen opponent; others slip on it
+{
+  const said = [], slips = []
+  const S2 = createSim({ seed: 1, fx: { announce: (t) => said.push(t), slipFx: (v, o) => slips.push([v, o]) } })
+  const R = S2.createRound({ key: 'spillway', seed: 4242, players: Array.from({ length: 4 }, (_, i) => ({ i })) })
+  const [me, body, rider, far] = R.sk
+  const place = (s, x, z, yaw, sp) => { s.x = x; s.z = z; s.y = sim.groundAt(R.W, x, z, 50); s.yaw = yaw; s.vx = Math.sin(yaw) * sp; s.vz = Math.cos(yaw) * sp; s.vy = 0; s.mode = MODE.GROUND }
+  place(me, -4, -25, 0, 6); place(far, -30, -30, 0, 0); place(rider, 6, -30, 0, 0)
+  // a fallen opponent lying right behind where we'll stop
+  body.alive = false; body.hp = 0; body.mode = MODE.DOWN; body.x = -4; body.z = -24.0; body.y = me.y
+  let maxT = 0, stopped = false
+  for (let k = 0; k < 200; k++) {
+    const inp = { 1: packInput({}), 2: packInput({}), 3: packInput({}) }
+    inp[0] = packInput({ yaw: 0, btn: k === 1 ? BTN.deuce : 0 })
+    R.step(inp)
+    if (me.deuce) { maxT = me.deuce.t; if (me.deuce.t > 1 && Math.hypot(me.vx, me.vz) < 0.05) stopped = true }
+  }
+  ok(stopped && maxT > 3 && !me.deuce, 'deuce: skater stops, squats and gets back on the board', `t ${maxT.toFixed(2)}`)
+  ok(R.poops.length === 1, 'deuce: drops one on the playfield', `${R.poops.length}`)
+  const p = R.poops[0] || { x: 0, z: 0 }
+  ok(said.includes('Droppin a DEUCE!!!'), 'deuce on a fallen opponent shows "Droppin a DEUCE!!!"', `body at ${Math.hypot(body.x - p.x, body.z - p.z).toFixed(2)} m`)
+  // a rider rolls over it → loses control (oil slick) for a couple of seconds
+  place(rider, p.x, p.z - 4, 0, 9)
+  let slipped = 0
+  for (let k = 0; k < 240; k++) { R.step({ 0: packInput({}), 1: packInput({}), 2: packInput({ my: 1, yaw: 0 }), 3: packInput({}) }); if (rider.slipT > 0) slipped++ }
+  ok(slips.length === 1 && slipped > 100, 'rolling over it spins the rider out for ~2 s', `${(slipped / 60).toFixed(2)} s`)
+  ok(R.poops.length === 0, 'it shrinks away within 5 s of landing', `${R.poops.length} left at ${(R.t - p.t).toFixed(1)} s`)
+}
 if (fail) { console.log(`${fail} move check(s) failed`); process.exit(1) }
 console.log('moves ok')

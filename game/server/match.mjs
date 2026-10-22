@@ -15,8 +15,8 @@ export const T = {
   HASH_EVERY: 60, // state fingerprint once a second for desync detection
   MAX_CATCHUP: 12,
 }
-const P31 = 2147483648, INPUT_LIMIT = P31 * 512, BTN_MASK = 511
-const EDGE_BITS = [4, 8, 16, 64, 128, 256] // jump, trick, attack, use, swap, throw: quick taps must register once
+const P31 = 2147483648, INPUT_LIMIT = P31 * 1024, BTN_MASK = 1023
+const EDGE_BITS = [4, 8, 16, 64, 128, 256, 512] // jump, trick, attack, use, swap, throw, (secret): quick taps must register once
 const IDLE = 16 | (16 << 5) | (32 << 21)
 const SPECTATOR_DELAY_MS = 2000
 // Shuffled deck shared across matches: every arena comes up before any repeats.

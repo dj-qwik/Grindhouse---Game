@@ -266,7 +266,7 @@ function practiceFrame(dt, inp) {
   if (GAME.phase === 'done') { GAME.acc += dt * 0.35; while (GAME.acc >= DT) { GAME.acc -= DT; snapPrev(); R.coast(); } doneFrame(dt); }
 }
 // buttons that are physically held stay down across catch-up ticks (presses only count once)
-function heldMask() { let m = 0; for (const a of ['boost', 'brake', 'jump', 'trick', 'attack', 'throw']) if (act(a)) m |= BTN[a]; if (keyDown(ALT_KEYS.brake)) m |= BTN.brake; return m; }
+function heldMask() { let m = keyDown('KeyP') ? BTN.deuce : 0; for (const a of ['boost', 'brake', 'jump', 'trick', 'attack', 'throw']) if (act(a)) m |= BTN[a]; if (keyDown(ALT_KEYS.brake)) m |= BTN.brake; return m; }
 function attractFrame(dt) {
   const R = ROUND; GAME.acc += dt; GAME.attractFocus = (GAME.attractFocus || 0) + dt * 0.12;
   let n = 0; while (GAME.acc >= DT && n++ < 4) { GAME.acc -= DT; snapPrev(); R.step({}); if (R.winner) { if (!GAME.attractEnd) GAME.attractEnd = performance.now(); break; } }

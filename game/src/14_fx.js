@@ -83,6 +83,16 @@ function installFxHooks() {
       }
       case 'stick': fxSpark(x, y, z, 0xff5c69); break;
       case 'signature': for (let k = 0; k < 36; k++) { const a2 = k / 36 * Math.PI * 2; part(x, y + 0.3, z, { vx: Math.cos(a2) * 14, vz: Math.sin(a2) * 14, vy: 1, drag: 4, life: 0.5, s0: 0.5, s1: 1.4, col: 0xb4e64a, add: true }); } decal(x, z, 7, 0x6a8a20); break;
+      case 'stink': // the drop: a fart, a wet thud, brown flecks and a green cloud
+        playSfx('fart', x, y + 0.6, z, 1);
+        for (let k = 0; k < 6; k++) part(x + R3(0.15), y + 0.15, z + R3(0.15), { vx: R3(1.5), vy: Math.random() * 2.5, vz: R3(1.5), g: 14, life: 0.4, s0: 0.12, s1: 0.06, col: k % 2 ? 0x6b4423 : 0x4a2e14, fade: false });
+        for (let k = 0; k < 10; k++) part(x + R3(0.4), y + 0.3 + Math.random() * 0.6, z + R3(0.4), { vy: 0.5 + Math.random() * 0.6, vx: R3(0.4), vz: R3(0.4), life: 1.4 + Math.random(), s0: 0.3, s1: 1.1, col: k % 2 ? 0x9fbf3a : 0x7a9a2a });
+        break;
+      case 'slip':
+        for (let k = 0; k < 12; k++) part(x + R3(0.2), y + 0.1, z + R3(0.2), { vx: R3(4), vy: Math.random() * 3, vz: R3(4), g: 16, life: 0.5, s0: 0.14, s1: 0.06, col: k % 2 ? 0x6b4423 : 0x4a2e14, fade: false });
+        decal(x, z, 1.1, 0x5a3a1a);
+        for (let k = 0; k < 5; k++) part(x + R3(0.3), y + 0.4, z + R3(0.3), { vy: 0.7, life: 1, s0: 0.3, s1: 0.9, col: 0x9fbf3a });
+        break;
       case 'pulse': for (let k = 0; k < 40; k++) { const a2 = k / 40 * Math.PI * 2; part(x + Math.cos(a2) * a, 0.5, z + Math.sin(a2) * a, { vy: 3, life: 0.6, s0: 1.2, s1: 2.4, col: 0xff5c69, add: true }); } break;
     }
   };
@@ -91,6 +101,8 @@ function installFxHooks() {
   FXHOOK.hitMark = (by, victim, amt, wid) => onHit(by, victim, amt, wid);
   FXHOOK.pickupFx = (i, w) => { if (i === viewSeat()) { trickPop(WEAPONS[w].name.toUpperCase(), 'picked up'); } };
   FXHOOK.killFeed = (v, by, w, kind) => onKill(v, by, w, kind);
+  FXHOOK.deuceFx = (i) => { const me = viewSeat(); pushFeed(`<b>${esc(nameOf(i))}</b> <span class="w">Droppin a DEUCE!!!</span>`, i === me); if (i === me) { playSfx('kill', null, null, null, 0.8); rumble(0.5, 300); } };
+  FXHOOK.slipFx = (v, owner) => { const me = viewSeat(); pushFeed(`<b>${esc(nameOf(v))}</b> <span class="w">slipped in</span> <b>${esc(nameOf(owner))}</b>'s mess`, v === me || owner === me); if (v === me) { trickPop('EWWW!', 'you slipped'); rumble(0.6, 400); } };
 }
 // blood on hits; choreography on eliminations
 function onHit(by, victim, amt, wid) {

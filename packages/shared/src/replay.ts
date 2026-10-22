@@ -12,7 +12,7 @@ export interface RoundReplay {
   active: number[] // seats playing (Grindhouse: everyone, in seat order)
   players: { i: number; speedMul: number }[] // every seat in the match (speedMul unused: all skaters share stats)
   seats: Address[] // wallet address of each seat
-  inputs: number[][] // per tick: packed input of each seat (an integer below 2^40), in `active` order
+  inputs: number[][] // per tick: packed input of each seat (an integer below 2^41), in `active` order
 }
 
 /** Canonical arena list: stageId = index + 1 (stable forever; append only). */
@@ -44,8 +44,8 @@ export class ReplayError extends Error {}
 
 /** 60 s at 60 Hz: no Grindhouse round can run longer (bible §1). */
 export const MAX_TICKS = 3600
-/** Packed inputs are integers below 2^40 (game/src/sim/01_base.js packInput). */
-export const INPUT_LIMIT = 2 ** 40
+/** Packed inputs are integers below 2^41 (game/src/sim/01_base.js packInput). */
+export const INPUT_LIMIT = 2 ** 41
 
 /** Minimal shape of game/dist/sim.cjs that a verifier needs. */
 export interface SimFactory {

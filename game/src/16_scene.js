@@ -50,6 +50,19 @@ function syncDynamic(R, dt, view) {
     else { o.rotation.x += dt * 9; o.rotation.z += dt * 5; if (p.k === 'molotov') fxFlame(p.x, p.y + 0.15, p.z); if (p.k === 'grenade' || p.k === 'pipebomb') { const w = WEAPONS[p.k]; if (w.fuse - p.t < 0.6 && Math.floor(p.t * 12) % 2) fxSpark(p.x, p.y + 0.1, p.z, 0xff5c69); } }
   }
   for (const [id, o] of B.proj) if (!live.has(id)) { GFX.arena.remove(o); B.proj.delete(id); }
+  // the hidden deuce: a cel-shaded swirl with a stink cloud and buzzing flies
+  if (!B.poops) B.poops = new Map();
+  const left = new Set();
+  for (const p of R.poops) {
+    left.add(p.id);
+    let o = B.poops.get(p.id);
+    if (!o) { o = poopMesh(); o.position.set(p.x, p.y, p.z); o.rotation.y = p.id * 1.7; GFX.arena.add(o); B.poops.set(p.id, o); o.userData.born = GFX.clock; }
+    const age = GFX.clock - o.userData.born, life = Math.max(0, 1 - (R.t - p.t) / 5), k = Math.min(1, age * 6) * (0.15 + 0.85 * life);
+    o.scale.setScalar(k * (1 + Math.sin(GFX.clock * 3 + p.id) * 0.02));
+    o.userData.flies.forEach((f, j) => { const a = GFX.clock * (3 + j) + j * 2.1; f.position.set(Math.cos(a) * (0.3 + j * 0.06), 0.45 + Math.sin(a * 1.7) * 0.12, Math.sin(a * 1.3) * (0.3 + j * 0.05)); });
+    if (Math.random() < 0.06) part(p.x + R3(0.15), p.y + 0.35, p.z + R3(0.15), { vy: 0.45, vx: R3(0.1), vz: R3(0.1), life: 1.6, s0: 0.15, s1: 0.55, col: 0x9fbf3a });
+  }
+  for (const [id, o] of B.poops) if (!left.has(id)) { GFX.arena.remove(o); B.poops.delete(id); }
   // molotov fire zones
   for (const f of R.fires) for (let k = 0; k < 2; k++) { const a = Math.random() * 6.28, d = Math.sqrt(Math.random()) * f.r; fxFlame(f.x + Math.cos(a) * d, f.y + 0.1, f.z + Math.sin(a) * d); }
 }
@@ -147,4 +160,21 @@ function syncLock(R, view) {
 function stickFor(inp, aimYaw) {
   const C = INPUT.yaw, wx = inp.my * Math.sin(C) - inp.mx * Math.cos(C), wz = inp.my * Math.cos(C) + inp.mx * Math.sin(C);
   return { mx: -wx * Math.cos(aimYaw) + wz * Math.sin(aimYaw), my: wx * Math.sin(aimYaw) + wz * Math.cos(aimYaw) };
+}
+
+// a stacked toon swirl (three tori and a tip) with outlines, plus a couple of flies
+let POOP_PARTS = null;
+function poopMesh() {
+  const T = THREE;
+  if (!POOP_PARTS) POOP_PARTS = { mat: toon('#6B4423'), hi: toon('#8A5A2E'), ol: new T.MeshBasicMaterial({ color: 0x22292b, side: T.BackSide }), fly: new T.MeshBasicMaterial({ color: 0x111111 }) };
+  const M = POOP_PARTS, g = new T.Group();
+  const add = (geo, m, y, sc) => { const a = new T.Mesh(geo, m); a.position.y = y; const o = new T.Mesh(geo, M.ol); o.scale.setScalar(sc); a.add(o); g.add(a); return a; };
+  const r1 = add(new T.TorusGeometry(0.17, 0.085, 8, 16), M.mat, 0.08, 1.12); r1.rotation.x = Math.PI / 2;
+  const r2 = add(new T.TorusGeometry(0.115, 0.075, 8, 14), M.hi, 0.2, 1.13); r2.rotation.x = Math.PI / 2; r2.position.x = 0.02;
+  const r3 = add(new T.TorusGeometry(0.06, 0.06, 8, 12), M.mat, 0.3, 1.15); r3.rotation.x = Math.PI / 2;
+  const tip = add(new T.ConeGeometry(0.06, 0.13, 10), M.hi, 0.39, 1.15); tip.rotation.z = 0.35;
+  const flies = [];
+  for (let j = 0; j < 3; j++) { const f = new T.Mesh(new T.SphereGeometry(0.022, 5, 4), M.fly); g.add(f); flies.push(f); }
+  g.userData.flies = flies;
+  return g;
 }

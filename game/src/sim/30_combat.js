@@ -17,6 +17,7 @@ function stepCombat(R, s) {
   s.fireCd -= dt; s.bankT += dt;
   s.altT = btn & BTN.alt ? s.altT + dt : 0;
   if (s.mode === MODE.DOWN) { s.atk = null; return; }
+  if (s.deuce) { s.atk = null; return; } // busy
   if ((press & BTN.throw) && s.thr && s.stagger <= 0) { doThrow(R, s); return; }
   // the trick button doubles as the Signature Slam once Adrenaline is full
   if ((press & BTN.trick) && s.adren >= 100 && s.stagger <= 0) { signature(R, s); return; }
@@ -350,4 +351,31 @@ function hazardTick(R, s, amt, kind) {
   if (R.t < WARMUP || !s.alive) return;
   damage(R, s, amt, null, kind, 0, 0, 0);
   s.hazKind = kind;
+}
+
+// ── the hidden one: drops land on the playfield, stay for the round, and spin out anyone else who rolls over them
+const POOP_LIFE = 5;
+function stepDeuces(R) {
+  for (const s of R.sk) {
+    const D = s.deuce;
+    if (!D || D.dropped || D.t < DEUCE.drop || !s.alive) continue;
+    D.dropped = true;
+    const bx = s.x - Math.sin(s.yaw) * 0.35, bz = s.z - Math.cos(s.yaw) * 0.35;
+    R.poops.push({ id: R.nextId++, x: bx, y: s.y, z: bz, o: s.i, t: R.t });
+    if (R.poops.length > 16) R.poops.shift();
+    sfx('plop', bx, s.y, bz, 1);
+    vfx('stink', bx, s.y, bz);
+    // right onto a fallen opponent?
+    if (R.sk.some((q) => q !== s && !q.alive && hyp(q.x - bx, q.z - bz) < 1.3 && Math.abs(q.y - s.y) < 1.2)) { announce('Droppin a DEUCE!!!'); deuceFx(s.i); }
+  }
+  // each one shrinks away over POOP_LIFE seconds so the arena never ends up carpeted
+  while (R.poops.length && R.t - R.poops[0].t >= POOP_LIFE) R.poops.shift();
+  if (!R.poops.length) return;
+  for (const q of R.sk) {
+    if (!q.alive || q.mode !== MODE.GROUND || q.deuce || (q.slipT || 0) > 0 || hyp(q.vx, q.vz) < 1.5) continue;
+    for (const p of R.poops) {
+      if (p.o === q.i && R.t - p.t < 3) continue;
+      if (hyp(q.x - p.x, q.z - p.z) < 0.3 + 0.45 * (1 - (R.t - p.t) / POOP_LIFE) && Math.abs(q.y - p.y) < 0.6) { q.slipT = 2.2; q.vx *= 1.1; q.vz *= 1.1; breakCombo(q); sfx('squish', q.x, q.y, q.z, 1); vfx('slip', q.x, q.y, q.z); slipFx(q.i, p.o); break; }
+    }
+  }
 }

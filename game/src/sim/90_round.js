@@ -33,7 +33,7 @@ function createRound(cfg, rng = {}) {
   const tieRank = new Map(tieOrder.map((i, k) => [i, k]));
   const R = {
     key: cfg.key, def: A, arena: W, W, sk, tick: 0, t: 0, proj: [], fires: [], picks: [], nextId: 1, dying: [],
-    events: [], wave: 0, lastPulse: -9, winner: null, firstBlood: false, said: {}, zoneNow: zoneAt(W, 0), tieOrder, variant, done: false,
+    events: [], poops: [], wave: 0, lastPulse: -9, winner: null, firstBlood: false, said: {}, zoneNow: zoneAt(W, 0), tieOrder, variant, done: false,
     get alive() { let n = 0; for (const s of sk) if (s.alive) n++; return n; },
   };
   if (A.init) A.init(R);
@@ -83,6 +83,7 @@ function createRound(cfg, rng = {}) {
       for (const s of sk) stepCombat(R, s);
       stepProjectiles(R);
       stepPickups(R);
+      stepDeuces(R);
       if (A.after) A.after(R, DT);
       stepZone(R);
       for (const s of sk) {
@@ -121,7 +122,7 @@ function createRound(cfg, rng = {}) {
      *  only — no combat, no effects, no RNG. Display only; the confirmed simulation stays authoritative. */
     predict(i, inputs) {
       const s = sk[i]; if (!s || !s.alive) return null;
-      const c = Object.assign({}, s, { pred: true, combo: s.combo.slice(), hist: s.hist.slice(), atk: s.atk ? { ...s.atk, hit: s.atk.hit.slice() } : null });
+      const c = Object.assign({}, s, { pred: true, combo: s.combo.slice(), hist: s.hist.slice(), atk: s.atk ? { ...s.atk, hit: s.atk.hit.slice() } : null, deuce: s.deuce ? { ...s.deuce } : null });
       let t = R.t;
       for (const p of inputs) {
         const u = unpackInput(p);
@@ -132,7 +133,7 @@ function createRound(cfg, rng = {}) {
     },
     /** Exact fingerprint of the simulation state (positions, velocities, health, weapons, projectiles). */
     hash() {
-      const n = [R.t, R.proj.length, R.picks.length, R.fires.length];
+      const n = [R.t, R.proj.length, R.picks.length, R.fires.length, R.poops.length];
       for (const s of sk) n.push(s.x, s.y, s.z, s.vx, s.vy, s.vz, s.yaw, s.hp, s.alive ? 1 : 0, s.mode, s.adren, s.ammo, s.kills, s.dmg, s.slot, s.ranged ? s.ranged.length : 0, s.melee ? s.melee.length : 0);
       for (const p of R.proj) n.push(p.x, p.y, p.z);
       for (const p of W.prims) if (p.vx || p.vz || p.gone) n.push(p.cx, p.cz, p.gone ? 1 : 0);

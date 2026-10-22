@@ -18,7 +18,7 @@ const S = path.join(ROOT, 'src')
 // Arena order here is display order only; stage ids live in packages/shared/src/replay.ts (append-only).
 let ARENA_FILES = ['spillway', 'rooftop', 'mall', 'junkyard', 'boardwalk', 'overpass', 'factory', 'schoolyard']
 ARENA_FILES = ARENA_FILES.filter((k) => fs.existsSync(path.join(S, 'arenas', k + '.js')))
-const FX_NAMES = ['sfx', 'vfx', 'announce', 'shake', 'hitMark', 'pickupFx', 'killFeed']
+const FX_NAMES = ['sfx', 'vfx', 'announce', 'shake', 'hitMark', 'pickupFx', 'killFeed', 'deuceFx', 'slipFx']
 const SIM_FILES = ['01_base.js', '10_world.js', '20_skater.js', '30_combat.js', '50_bots.js']
 const args = process.argv.slice(2)
 if (args.includes('--only')) { const keep = args[args.indexOf('--only') + 1].split(','); ARENA_FILES = ARENA_FILES.filter((k) => keep.includes(k)) }

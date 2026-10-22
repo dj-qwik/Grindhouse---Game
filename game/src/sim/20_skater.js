@@ -22,7 +22,7 @@ function makeSkater(i, look, name) {
     rail: null, railK: 0, railU: 0, railDir: 1, gs: 0, railCd: 0, lastRail: null, grindT: 0,
     wallNx: 0, wallNz: 0, wallT: 0, wallCd: 0,
     trick: null, trickT: 0, trickSpin: 0, pend: 0, combo: [], hist: [], adren: 0, manual: 0, lastBank: null, bankT: -9,
-    downT: 0, immune: 0, stagger: 0, flinch: 0, boostT: 0, bailT: -9,
+    downT: 0, immune: 0, stagger: 0, slipT: 0, deuce: null, flinch: 0, boostT: 0, bailT: -9,
     melee: 'bat', ranged: null, ammo: 0, thr: 'shove', slot: 0, atk: null, fireCd: 0, altT: 0, adrenBoost: false,
     kills: 0, dmg: 0, deathT: -1, deathTick: -1, killer: -1, killWeapon: null, lastBy: -1, lastByT: -1e9, lastByW: null, place: 0,
     btn: 0, press: 0, prevBtn: 0, mx: 0, my: 0, hx, hy, hz, impactCd: 0, burn: 0, burnBy: -1, zoneT: 0,
@@ -46,9 +46,12 @@ function stepSkater(s, W, t) {
   s.airT = s.mode === MODE.AIR ? s.airT + dt : 0;
   s.coyote -= dt; s.jumpBuf -= dt; s.railCd -= dt; s.wallCd -= dt; s.immune -= dt; s.stagger -= dt; s.flinch -= dt; s.boostT -= dt; s.impactCd -= dt;
   if (press & BTN.jump) s.jumpBuf = MOVE.jumpBuf;
-  if (s.mode === MODE.DOWN) { stepDown(s, W, dt); return; }
+  if (s.mode === MODE.DOWN) { s.deuce = null; stepDown(s, W, dt); return; }
+  if (!s.deuce && (press & BTN.deuce) && s.mode === MODE.GROUND && !s.atk && s.charge < 0) { s.deuce = { t: 0, yaw: s.aimYaw, dropped: false }; s.trick = null; s.manual = 0; }
+  if (s.deuce) { stepDeuce(s, W, dt); return; }
+  if (s.slipT > 0) s.slipT -= dt;
   const ctl = s.stagger > 0 ? 0.35 : s.flinch > 0 ? 0.7 : 1;
-  const mag = hyp(s.mx, s.my);
+  const mag = s.slipT > 0 ? 0 : hyp(s.mx, s.my); // slipping in someone's mess: no steering, no push
   const [dX, dZ] = stickWorld(s, s.mx, s.my);
   if (s.mode === MODE.GRIND) { stepGrind(s, W, dt); return; }
   if (s.mode === MODE.WALL) { stepWall(s, W, dt); return; }
@@ -121,7 +124,8 @@ function stepGround(s, W, dt, btn, mag, dX, dZ, ctl) {
   if (sp > 1e-4) { const k = Math.max(0, sp - dec * dt) / sp; s.vx *= k; s.vz *= k; s.vy *= k; }
   // lateral grip (powerslide grips less: you skid)
   const rx = Math.cos(s.yaw), rz = -Math.sin(s.yaw), lat = s.vx * rx + s.vz * rz;
-  const g = 1 - DM.exp(-(braking ? MOVE.slideGrip : MOVE.grip) * dt);
+  const g = 1 - DM.exp(-(s.slipT > 0 ? 0.6 : braking ? MOVE.slideGrip : MOVE.grip) * dt);
+  if (s.slipT > 0 && s.mode === MODE.GROUND) s.yaw = angWrap(s.yaw + 7 * dt); // spinning out
   s.vx -= rx * lat * g; s.vz -= rz * lat * g;
   // gravity along the surface (slopes speed you up / slow you down)
   s.vx += G * s.ny * s.nx * dt; s.vy += (-G + G * s.ny * s.ny) * dt; s.vz += G * s.ny * s.nz * dt;
@@ -339,4 +343,16 @@ let LGX = 0, LGY = 0, LGZ = 0;
 function lagPos(s, tick, lag) {
   if (lag <= 0 || tick - lag < 1) { LGX = s.x; LGY = s.y; LGZ = s.z; return; }
   const k = (tick - lag) % HIST; LGX = s.hx[k]; LGY = s.hy[k]; LGZ = s.hz[k];
+}
+
+// ── the hidden one (3.2 s): stop, face away from the camera, pants down, squat, drop it, pants up, back on the board
+const DEUCE = { stop: 0.45, down: 0.8, drop: 1.6, up: 2.5, done: 3.2 };
+function stepDeuce(s, W, dt) {
+  const D = s.deuce; D.t += dt;
+  const sp = hyp(s.vx, s.vz); if (sp > 1e-4) { const k = Math.max(0, sp - 18 * dt) / sp; s.vx *= k; s.vz *= k; } s.vy = 0;
+  s.yaw = angWrap(s.yaw + clamp(angDiff(D.yaw, s.yaw), -8 * dt, 8 * dt));
+  s.x += s.vx * dt; s.z += s.vz * dt;
+  const gy = groundAt(W, s.x, s.z, s.y + STEP); if (gy > -1e8) s.y = gy;
+  collideSkater(W, s);
+  if (D.t >= DEUCE.done) s.deuce = null;
 }

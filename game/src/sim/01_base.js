@@ -76,11 +76,11 @@ function zoneDps(t) { return t < 12 ? 0 : t < 28 ? 4 : t < 40 ? 8 : t < 50 ? 16 
 
 // ───────────────────────── input: one integer per skater per tick ─────────────────────────
 // low 31 bits: stick x (5) · stick y (5) · aim yaw (11) · aim pitch (6) · view lag (4)
-// high bits (× 2^31): buttons. Total < 2^40, an exact JSON number. The stick is relative to the aim yaw.
-const BTN = { boost: 1, brake: 2, jump: 4, trick: 8, attack: 16, alt: 32, use: 64, swap: 128, throw: 256 };
-const BTN_MASK = 511;
+// high bits (× 2^31): buttons. Total < 2^41, an exact JSON number. The stick is relative to the aim yaw.
+const BTN = { boost: 1, brake: 2, jump: 4, trick: 8, attack: 16, alt: 32, use: 64, swap: 128, throw: 256, deuce: 512 };
+const BTN_MASK = 1023;
 const P31 = 2147483648;
-const INPUT_LIMIT = P31 * 512;
+const INPUT_LIMIT = P31 * 1024;
 function packInput(inp) {
   const q = (v) => clamp(Math.round((v || 0) * 15), -15, 15) + 16;
   let yaw = (inp.yaw || 0) % TAU; if (yaw < 0) yaw += TAU;
