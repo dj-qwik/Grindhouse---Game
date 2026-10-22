@@ -18,7 +18,7 @@ The root `render.yaml` is a Render Blueprint. Every push to `main` redeploys.
 2. In `grindhouse-game` → **Environment**, set:
    - **`OWNER_ADDRESS`** — your wallet. It receives the 10% house fee, is the escrow's guardian (pause/veto), and
      becomes the escrow admin after you accept the 2-day handover (`acceptDefaultAdminTransfer()` from that wallet).
-   - **`PRIVY_APP_ID`** — the *public* App ID from dashboard.privy.io (never the App Secret).
+   - `PRIVY_APP_ID` is already pinned in `render.yaml` (`cmviy007f00ta0hl5eoig0bbl`, public).
 3. Privy dashboard: use a **Production** app → Configuration → App settings → Domains → add the Render URL (or your
    custom domain) to **Allowed origins** → Login methods: **Google** and **Email** on (blank Google client ID/secret
    is fine) → Embedded wallets on.

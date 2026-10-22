@@ -88,6 +88,7 @@ function stepGround(s, W, dt, btn, mag, dX, dZ, ctl) {
   if (sp > 1.2 && s.vx * fx + s.vz * fz < -0.25 * sp) { s.yaw = angWrap(s.yaw + PI); fx = -fx; fz = -fz; }
   const braking = !!(btn & BTN.brake);
   let pushing = false;
+  s.scrub = false; // set again below only while the stick points behind you at speed
   if (mag > 0.2) {
     const target = yawOf(dX, dZ), diff = angDiff(target, s.yaw);
     if (Math.abs(diff) > 2.4 && sp > 4) { /* hairpin at speed: you can't, you scrub instead */ s.scrub = true; }
@@ -101,7 +102,7 @@ function stepGround(s, W, dt, btn, mag, dX, dZ, ctl) {
       fx = Math.sin(s.yaw); fz = Math.cos(s.yaw);
       pushing = Math.cos(diff) > 0.35;
     }
-  } else s.scrub = false;
+  }
   // push: diminishing returns near the flat-ground cap; boost push is quicker but leaves you exposed
   if (pushing && s.charge < 0 && s.manual <= 0) {
     const boost = !!(btn & BTN.boost), cap = boost ? MOVE.boostCap : MOVE.cap;
@@ -131,7 +132,9 @@ function stepGround(s, W, dt, btn, mag, dX, dZ, ctl) {
   const step = hyp(s.x - ox, s.z - oz);
   const gy = groundAt(W, s.x, s.z, s.y + STEP, s.y + STEP + 0.6 + step * 2);
   const drop = s.y - gy, stick = step * 1.1 + 0.06, was = s.onPrim;
-  if (gy > -1e8 && (drop <= 0.02 || (s.vy <= 1 && drop <= stick))) { s.y = gy; s.nx = NX; s.ny = NY; s.nz = NZ; s.onPrim = GP; }
+  // riding up a transition into the flat deck behind its lip: you leave the ramp, you don't stick to the deck
+  const lip = was && was.type !== 'box' && GP && GP.type === 'box' && s.vy > 1.5;
+  if (gy > -1e8 && !lip && (drop <= 0.02 || (s.vy <= 1 && drop <= stick))) { s.y = gy; s.nx = NX; s.ny = NY; s.nz = NZ; s.onPrim = GP; }
   else {
     // off a lip. Off a steep quarter pipe without popping you go straight up and come back in ("vert air");
     // hold jump at the lip to keep your outward speed and transfer.
