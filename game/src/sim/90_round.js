@@ -117,6 +117,19 @@ function createRound(cfg, rng = {}) {
       const keep = RNG; RNG = makeRng('coast');
       try { for (const s of sk) { s.btn = 0; s.press = 0; s.mx = 0; s.my = 0; if (s.alive) stepSkater(s, W, R.t); else stepCorpse(s, W); } } finally { RNG = keep; }
     },
+    /** Browser-side prediction: a copy of skater `i` moved through `inputs` (packed, oldest first) with movement
+     *  only — no combat, no effects, no RNG. Display only; the confirmed simulation stays authoritative. */
+    predict(i, inputs) {
+      const s = sk[i]; if (!s || !s.alive) return null;
+      const c = Object.assign({}, s, { pred: true, combo: s.combo.slice(), hist: s.hist.slice(), atk: s.atk ? { ...s.atk, hit: s.atk.hit.slice() } : null });
+      let t = R.t;
+      for (const p of inputs) {
+        const u = unpackInput(p);
+        c.mx = u.mx; c.my = u.my; c.aimYaw = u.yaw; c.aimPitch = u.pitch; c.btn = u.btn; c.press = u.btn & ~c.prevBtn;
+        t += DT; stepSkater(c, W, t); c.prevBtn = c.btn;
+      }
+      return c;
+    },
     /** Exact fingerprint of the simulation state (positions, velocities, health, weapons, projectiles). */
     hash() {
       const n = [R.t, R.proj.length, R.picks.length, R.fires.length];

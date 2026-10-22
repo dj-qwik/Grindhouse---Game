@@ -1,4 +1,4 @@
-// Grindhouse game server: serves the web client and runs every online match over WebSockets.
+// Grindhouse game server: serves the web client and runs every online match over WebSockets (60 Hz, authoritative).
 //   PORT (Render sets it) · WEB_DIR (built client, default ../dist-web) · SIM (default ../dist/sim.cjs)
 //   ALLOWED_ORIGINS (comma list; default: same host) · LOG_LEVEL
 import http from 'node:http'
@@ -19,6 +19,7 @@ const WEB_DIR = path.resolve(process.env.WEB_DIR || path.join(here, '..', 'dist-
 const PORT = +(process.env.PORT || 8080)
 const ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean)
 const FREE_SIZES = [2, 4, 6, 8]
+const LOOKS = 8
 const log = (...a) => console.log(new Date().toISOString(), ...a)
 
 // ───────────── static web client
@@ -78,11 +79,12 @@ function statusPage(res) {
     ${step(!!c.owner, 'Owner wallet set', c.owner ? exp(c.owner) + ' — receives the 10% house fee and can pause or veto results' : 'Set OWNER_ADDRESS (your wallet) in Render → grindhouse-game → Environment, then redeploy.')}
     ${step(!needsGas && c.status !== 'starting', 'Server wallet has gas', `${exp(c.operator)} · balance <b>${esc(c.operatorBalance)}</b> ${c.chainId === 4663 ? 'ETH' : 'testnet ETH'}${needsGas ? (c.chainId === 4663 ? '<br>Send about 0.005 ETH on <b>Robinhood Chain</b> here. It pays the network fees for opening lobbies and paying out (fractions of a cent each).' : '<br>Send about 0.05 testnet ETH here (Robinhood faucet: <a href="https://faucet.testnet.chain.robinhood.com/" target="_blank" rel="noopener">faucet.testnet.chain.robinhood.com</a>). It pays gas for opening lobbies and paying out.') : ''}`)}
     ${step(!!c.escrow, 'Escrow contract deployed', c.escrow ? exp(c.escrow) : c.status === 'deploying' ? 'Deploying now…' : 'Deploys automatically once the wallet has gas.')}
-    ${step(c.status === 'ready', 'Real-money matches open', c.status === 'ready' ? 'Players can now choose “Play for tETH”.' : c.error ? 'Error: ' + esc(c.error) : 'Status: ' + esc(c.status))}
+    ${step(!!c.privyAppId, 'Privy app configured', c.privyAppId ? 'App ID ' + esc(c.privyAppId) : 'Set PRIVY_APP_ID (the public Privy App ID) in Render → grindhouse-game → Environment, then redeploy.')}
+    ${step(c.status === 'ready', 'Real-money matches open', c.status === 'ready' ? `Players can now choose “Play for ${c.chainId === 4663 ? 'ETH' : 'tETH'}”.` : c.error ? 'Error: ' + esc(c.error) : 'Status: ' + esc(c.status))}
   </ol>`
   res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
   res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="20"><title>Grindhouse · server status</title>
-<style>:root{color-scheme:dark}body{font:15px/1.5 system-ui,sans-serif;background:#0b0d2a;color:#e8eaff;margin:0;padding:24px 16px;max-width:760px;margin-inline:auto}h1{font-size:1.4rem}a{color:#37D8E9;word-break:break-all}ol{padding:0;list-style:none;display:grid;gap:10px}li{padding:12px 14px;border-radius:12px;background:#151a45;border:1px solid #262c66}li.ok b{color:#7EE2B8}li.todo b{color:#FFD95B}li div{opacity:.9;margin-top:4px}small{opacity:.6}</style></head>
+<style>:root{color-scheme:dark}body{font:15px/1.5 system-ui,sans-serif;background:#22292B;color:#F4EEDC;margin:0;padding:24px 16px;max-width:760px;margin-inline:auto}h1{font-size:1.4rem}a{color:#36DCE8;word-break:break-all}ol{padding:0;list-style:none;display:grid;gap:10px}li{padding:12px 14px;border-radius:12px;background:#2E3739;border:1px solid #3d4749}li.ok b{color:#B4E64A}li.todo b{color:#FF9B36}li div{opacity:.9;margin-top:4px}small{opacity:.6}</style></head>
 <body><h1>Grindhouse · server status</h1><p><small>Chain ${esc(c?.chainId ?? '-')} · ${matches.size} live match(es) · ${conns.size} connected · refreshes every 20 s</small></p>${body}<p><a href="/">← Back to the game</a></p></body></html>`)
 }
 const server = http.createServer(serveStatic)
@@ -100,7 +102,7 @@ function findOrCreate(mode, size, stake) {
 function onMatch(m, ev, data) {
   if (ev === 'start') log('match start', m.id.slice(0, 8), m.mode, m.size, m.seats.map((s) => s.name).join(','))
   if (ev === 'champion') {
-    log('match champion', m.id.slice(0, 8), m.seats[data.winner].name, 'rounds', m.roundNo)
+    log('match winner', m.id.slice(0, 8), m.seats[data.winner].name, m.round.key, m.round.t.toFixed(1) + 's')
     if (m.mode === 'cash' && cash) cash.publishEvidence(m.lobby, m).catch((e) => log('evidence error', e))
   }
   if (ev === 'closed') {
@@ -152,7 +154,7 @@ function startCashMatch(L) {
   m.seats = L.roster.map((wallet, i) => {
     const c = L.waiting.get(wallet.toLowerCase())
     const sess = c?.session
-    const seat = { i, kind: 'human', name: sess?.name || wallet.slice(0, 6) + '…' + wallet.slice(-4), wallet, conn: c || null, connected: !!c, input: 0x8080, applied: 0, pressJ: false, pressD: false, ready: false }
+    const seat = m.newSeat(i, { name: sess?.name || wallet.slice(0, 6) + '…' + wallet.slice(-4), look: sess?.look ?? i % 8, wallet }, c || null)
     if (c) { c.match = m; c.seat = seat; if (sess) { sess.match = m; sess.seat = seat } }
     return seat
   })
@@ -162,7 +164,7 @@ function startCashMatch(L) {
 }
 
 // ───────────── WebSockets
-const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 4096 })
+const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 4096, perMessageDeflate: { threshold: 1024 } })
 wss.on('connection', (ws, req) => {
   const origin = req.headers.origin || ''
   const host = req.headers.host || ''
@@ -199,8 +201,9 @@ function handle(conn, m) {
     case 'hello': {
       // resume a session (reconnect after a dropped connection / page reload) or start a new guest one
       let tok = typeof m.token === 'string' && sessions.has(m.token) ? m.token : null
-      if (!tok) { tok = crypto.randomBytes(18).toString('base64url'); sessions.set(tok, { user: 'guest:' + tok.slice(0, 8), name: cleanName(m.name), match: null, seat: null }) }
+      if (!tok) { tok = crypto.randomBytes(18).toString('base64url'); sessions.set(tok, { user: 'guest:' + tok.slice(0, 8), name: cleanName(m.name), look: 0, match: null, seat: null }) }
       const s = sessions.get(tok); s.name = cleanName(m.name || s.name)
+      if (Number.isInteger(m.look) && m.look >= 0 && m.look < LOOKS) s.look = m.look
       conn.session = s
       s.nonce = crypto.randomBytes(12).toString('hex')
       conn.sendJson({ t: 'welcome', token: tok, name: s.name, sizes: FREE_SIZES, tick: T.TICK_MS, nonce: s.nonce, wallet: s.wallet || null, cash: cash ? cash.publicConfig() : null })
@@ -224,7 +227,7 @@ function handle(conn, m) {
       if (m.mode === 'cash') return void queueCash(conn, m)
       if (m.mode !== 'free') return
       const match = findOrCreate('free', size, null)
-      const seat = match.join(conn, { name: S.name || 'Player', user: S.user })
+      const seat = match.join(conn, { name: S.name || 'Skater', look: S.look, user: S.user })
       if (!seat) return conn.sendJson({ t: 'error', code: 'full', msg: 'That lobby just filled. Try again.' })
       conn.match = match; conn.seat = seat; S.match = match; S.seat = seat
       return
@@ -236,7 +239,6 @@ function handle(conn, m) {
       return conn.sendJson({ t: 'left' })
     }
     case 'in': if (conn.match && conn.seat) conn.match.input(conn.seat, m.p); return
-    case 'ready': if (conn.match && conn.seat) conn.match.ready(conn.seat); return
     case 'resync': if (conn.match && conn.seat) conn.sendJson(conn.match.syncMsg(conn.seat)); return
   }
 }
@@ -270,8 +272,8 @@ async function queueCash(conn, m) {
   if (!S.wallet) return conn.sendJson({ t: 'error', code: 'auth', msg: 'Sign in with your wallet first.' })
   let stakeWei; try { stakeWei = parseEther(String(m.stake)) } catch { return }
   const cfg = cash.publicConfig()
-  if (!cfg.tiers.includes(formatEther(stakeWei)) || !cfg.sizes.includes(+m.size)) return conn.sendJson({ t: 'error', code: 'tier', msg: 'Pick one of the listed stakes and lobby sizes.' })
-  const L = await cash.findOrOpen(stakeWei, +m.size)
+  if (!cfg.tiers.includes(formatEther(stakeWei))) return conn.sendJson({ t: 'error', code: 'tier', msg: 'Pick one of the listed stakes.' })
+  const L = await cash.findOrOpen(stakeWei, cfg.sizes[0])
   L.waiting.set(S.wallet.toLowerCase(), conn); conn.cashLobby = L
   conn.sendJson(cash.lobbyView(L, S.wallet))
 }

@@ -3,8 +3,8 @@
 //  - First boot with no escrow configured: deploys HotShotsEscrow (testnet), grants itself OPERATOR,
 //    makes OWNER_ADDRESS the guardian (pause/veto) and fee treasury, registers the co-signers.
 //  - Cash lobbies are on-chain matches: players deposit from their own wallet (Privy) into the escrow; the
-//    lobby fills from on-chain deposits, locks, and plays with no bots. Unfilled lobbies are cancelled and
-//    every deposit is refunded automatically.
+//    lobby fills from on-chain deposits (2–8 skaters, equal stakes), locks when 8 are in or FILL_SECONDS after the
+//    second deposit, and plays with no bots. Lobbies that never reach 2 are cancelled and refunded automatically.
 //  - Finished matches publish evidence + full round replays; independent co-signers replay and sign;
 //    the settlement worker submits, waits out the dispute window, and pays the champion.
 import crypto from 'node:crypto'
@@ -25,9 +25,10 @@ import { derivedAccount } from '../../services/settlement/src/keys.ts'
 
 const BYTECODE = JSON.parse(fs.readFileSync(new URL('../../packages/shared/src/escrowBytecode.json', import.meta.url), 'utf8')).bytecode
 const log = (...a) => console.log(new Date().toISOString(), '[cash]', ...a)
-export const RULES_VERSION = 'grindhouse-rules-1'
+export const RULES_VERSION = 'grindhouse-rules-1' // one round, ≤60 s, last skater standing, tiebreak hp › kills › damage › seed
 export const ADMISSION_SECONDS = 600 // an unfilled lobby is cancelled (and refunded) after 10 minutes
-const CASH_SIZES = [2, 4, 6, 8].filter((n) => LEGAL_MATCH_SIZES.includes(n))
+const CASH_SIZES = [8].filter((n) => LEGAL_MATCH_SIZES.includes(n)) // capacity; matches start with 2+
+export const FILL_SECONDS = Number(process.env.FILL_SECONDS || 60)
 
 /** Wallet derived from a long random secret (Render `generateValue`). Testnet only; mainnet needs a KMS signer. */
 export function deriveAccount(secret, role, chainId) {
@@ -86,7 +87,7 @@ export async function createCash({ createMatch, onLobbyChange }) {
   C.publicConfig = () => ({
     enabled: C.status === 'ready', status: C.status, error: C.error, chainId, rpcUrl, escrow: C.escrow, escrowDeployBlock: String(C.deployBlock),
     operator: C.operator, operatorBalance: formatEther(C.balanceWei), owner, tiers: STAKE_TIERS_WEI.map((w) => formatEther(w)), sizes: CASH_SIZES,
-    privyAppId: process.env.PRIVY_APP_ID || null, explorer: chain.blockExplorers?.default?.url || null, admissionSeconds: ADMISSION_SECONDS,
+    privyAppId: process.env.PRIVY_APP_ID || null, explorer: chain.blockExplorers?.default?.url || null, admissionSeconds: ADMISSION_SECONDS, fillSeconds: FILL_SECONDS,
   })
   const refreshBalance = async () => { try { C.balanceWei = await pub.getBalance({ address: C.operator }) } catch {} }
 
@@ -211,7 +212,7 @@ export async function createCash({ createMatch, onLobbyChange }) {
     const lobbyId = crypto.randomUUID()
     const L = { lobbyId, matchId: matchIdFromLobby(lobbyId), stakeWei, size, state: 'opening', depositors: [], waiting: new Map(), deadline: Date.now() + ADMISSION_SECONDS * 1000, createdAt: Date.now() }
     C.lobbies.set(L.matchId, L)
-    lobbyEscrow.open({ lobbyId, region: 'oregon', capacity: size, stakeWei, admissionSeconds: ADMISSION_SECONDS, rulesVersion: RULES_VERSION, stagePoolVersion: 'arenas-20' })
+    lobbyEscrow.open({ lobbyId, region: 'oregon', capacity: size, stakeWei, admissionSeconds: ADMISSION_SECONDS, rulesVersion: RULES_VERSION, stagePoolVersion: 'arenas-8' })
       .then(async ({ hash }) => {
         const rc = await pub.waitForTransactionReceipt({ hash, timeout: 180000 })
         if (rc.status !== 'success') throw new Error('createMatch reverted')
@@ -223,6 +224,7 @@ export async function createCash({ createMatch, onLobbyChange }) {
   C.lobbyView = (L, wallet) => ({
     t: 'cashLobby', matchId: L.matchId, size: L.size, stake: formatEther(L.stakeWei), state: L.state, deadlineMs: Math.max(0, L.deadline - Date.now()),
     seats: L.depositors.map((a) => ({ wallet: a, you: wallet && a.toLowerCase() === wallet.toLowerCase(), online: L.waiting.has(a.toLowerCase()) })),
+    startsInMs: L.fillAt ? Math.max(0, L.fillAt + FILL_SECONDS * 1000 - Date.now()) : null,
     youDeposited: !!(wallet && L.depositors.some((a) => a.toLowerCase() === wallet.toLowerCase())), escrow: C.escrow, chainId, error: L.error || null,
   })
   async function lobbyLoop() {
@@ -232,7 +234,11 @@ export async function createCash({ createMatch, onLobbyChange }) {
         const players = (await escrow.getPlayers(L.matchId)).map((a) => getAddress(a))
         const changed = players.join() !== L.depositors.join()
         L.depositors = players
-        if (players.length >= L.size) {
+        // fill window: starts at the 2nd deposit, resets if the lobby drops back under 2
+        if (players.length >= 2 && !L.fillAt) L.fillAt = Date.now()
+        if (players.length < 2) L.fillAt = 0
+        const due = players.length >= L.size || (L.fillAt && Date.now() >= Math.min(L.fillAt + FILL_SECONDS * 1000, L.deadline - 30000))
+        if (due) {
           L.state = 'locking'; onLobbyChange(L)
           const r = await lobbyEscrow.lockIfReady(L.matchId, players)
           if (!r.locked) { L.state = 'open'; continue }
@@ -254,14 +260,14 @@ export async function createCash({ createMatch, onLobbyChange }) {
   // ── evidence from a finished match (seats are the locked roster in sorted order)
   C.publishEvidence = async (L, m) => {
     const seats = L.roster
-    const replays = m.audit.map((a) => ({ n: a.n, key: a.key, seedReveal: a.seedReveal, active: a.active, players: a.players, seats, inputs: a.inputs }))
-    const rounds = replays.map((r, k) => ({
+    const replays = m.audit.map((a) => ({ n: a.n, key: a.key, seedReveal: a.seedReveal, active: a.players.map((p) => p.i), players: a.players, seats, inputs: a.inputs }))
+    const rounds = replays.map((r) => ({
       round: r.n, stageId: stageIdOf(r.key), stageRevision: Number(process.env.STAGE_REVISION || 1),
-      seedCommitment: keccak256(r.seedReveal), seedReveal: r.seedReveal, winner: seats[m.roundWinners[k]], scoreEvidenceHash: replayHash(r),
+      seedCommitment: keccak256(r.seedReveal), seedReveal: r.seedReveal, winner: seats[m.champion], scoreEvidenceHash: replayHash(r),
     }))
     const evidence = { chainId, escrow: C.escrow, matchId: L.matchId, rosterHash: rosterHash(seats), configHash: (await escrow.getMatch(L.matchId)).configHash, rounds }
     await store.putEvidence(L.matchId, evidence, replays)
-    log('evidence published', L.matchId.slice(0, 10), 'rounds', rounds.length, 'champion', seats[m.champion])
+    log('evidence published', L.matchId.slice(0, 10), m.round.key, 'winner', seats[m.champion])
     active.add(L.matchId); kick() // settle right away: winners are paid the moment the co-signers agree
   }
   C.getEvidence = (matchId) => store.getEvidence(matchId)

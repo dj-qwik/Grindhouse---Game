@@ -1,0 +1,377 @@
+// ───────────────────────── REAL-MONEY PLAY (ETH on Robinhood Chain, via Privy) ─────────────────────────
+// Email sign-in (Privy) creates each player a "game wallet" they own; we never hold its keys and MetaMask is
+// never involved. Players add ETH by sending to its address and cash out any time from the Wallet screen. Stakes go
+// from that wallet into the escrow contract; only the contract pays out (90% winner / 10% house), after
+// independent co-signers replay the match; the escrow pays the champion in that same transaction. Leave before the lobby
+// locks and you get your stake back.
+const CASH = (() => {
+  const C = { cfg: null, privy: null, w: null, bal: null, verified: null, stake: null, size: 8, lobby: null, busy: '', err: '', tx: null, match: null, settle: null, co: { to: '', amt: '', confirm: false, busy: '', err: '', tx: null, sent: '' }, back: 'home' };
+  const FAUCET = 'https://faucet.testnet.chain.robinhood.com/';
+  const GAS_BUFFER = parseEth('0.0003');
+  const W = () => window.HSWallet;
+  const short = (a) => a ? a.slice(0, 6) + '…' + a.slice(-4) : '';
+  const enabled = () => !!(C.cfg && C.cfg.enabled && C.privy && W());
+  // the server offers real money but the wallet hasn't loaded (yet, or it failed): say so, never fall back to the demo
+  const pending = () => !!(C.cfg && C.cfg.enabled && C.privy && !W());
+  const walletError = () => window.HSWalletError || null;
+  // catch failures inside the wallet bundle (they happen before it can report anything itself)
+  addEventListener('error', (e) => { if (e && e.filename && e.filename.includes('/wallet/')) { window.HSWalletError = e.message; renderPill(); if (GAME.screen === 'home') showOverlay(homeCard()); } });
+  addEventListener('unhandledrejection', (e) => { const st = String(e && e.reason && e.reason.stack || ''); if (st.includes('/wallet/')) { window.HSWalletError = String(e.reason.message || e.reason); renderPill(); if (GAME.screen === 'home') showOverlay(homeCard()); } });
+  setTimeout(() => { if (pending() && !walletError()) { window.HSWalletError = 'The wallet did not start within 20 seconds.'; renderPill(); if (GAME.screen === 'home') showOverlay(homeCard()); } }, 20000);
+  const unit = () => (C.cfg && C.cfg.chainId === 4663 ? 'ETH' : 'tETH');
+
+  async function loadConfig() {
+    if (!NET.enabled()) return;
+    try {
+      const j = await (await fetch('/api/config')).json();
+      C.cfg = j.cash; C.privy = j.privyAppId;
+      if (C.cfg && C.cfg.tiers && !C.stake) C.stake = C.cfg.tiers[Math.min(2, C.cfg.tiers.length - 1)];
+    } catch {}
+    renderPill(); if (GAME.screen === 'home') showOverlay(homeCard());
+    if (!C.cfg || C.cfg.status !== 'ready') setTimeout(loadConfig, 20000); // server may still be deploying the escrow
+  }
+  async function refresh() {
+    C.w = W() ? W().state() : null;
+    if (C.w && C.w.address) { try { const b = await W().balance(); C.bal = b == null ? null : BigInt(b); } catch {} } else C.bal = null;
+    if (C.verified && (!C.w || !C.w.address || C.w.address.toLowerCase() !== C.verified.toLowerCase())) C.verified = null;
+    renderPill(); rerender();
+    if (GAME.screen === 'home' && !$('#ov').hidden) showOverlay(homeCard()); // the home card's wording depends on the wallet having loaded
+  }
+  addEventListener('hswallet', refresh);
+  addEventListener('hswallet', () => setTimeout(checkConsent, 0));
+  setInterval(() => { if (C.w && C.w.address) { refresh(); checkConsent(); } }, 12000);
+  // redraw only when something visible changed (a redraw mid-click would swallow the click)
+  let lastHtml = '';
+  const STATUS_RE = /<p id="cashStatus">[\s\S]*?<\/p>/;
+  const paint = (html) => {
+    const key = html.replace(STATUS_RE, ''); // the ticking countdown alone never warrants a redraw
+    if (key !== lastHtml || $('#ov').hidden) { lastHtml = key; showOverlay(html); return; }
+    const el = document.getElementById('cashStatus'), m = html.match(STATUS_RE);
+    if (el && m) el.outerHTML = m[0];
+  };
+  const rerender = () => {
+    if (GAME.screen === 'cashSetup') paint(setupCard()); else if (GAME.screen === 'cashLobby') paint(lobbyCard());
+    else if (GAME.screen === 'cashWallet') { // keep the cursor where it was if a balance update redraws the card
+      const f = document.activeElement, id = f && f.id, pos = f && f.selectionStart;
+      paint(walletCard());
+      const g = id && document.getElementById(id); if (g && g !== document.activeElement) { g.focus(); try { g.setSelectionRange(pos, pos); } catch {} }
+    }
+  };
+
+  // ── wallet pill in the top bar
+  function renderPill() {
+    const badge = $('#modeBadge');
+    if (badge && NET.enabled()) { const live = C.cfg && C.cfg.enabled; badge.textContent = live ? (C.cfg.chainId === 4663 ? 'Mainnet' : 'Testnet') : 'Beta'; }
+    const pill = document.querySelector('.wallet'); if (!pill) return;
+    if (!C.cfg || !C.privy) return; // offline/demo: keep the simulated test wallet
+    const amt = pill.querySelector('.amt'), btn = $('#faucet');
+    const net = C.cfg.chainId === 4663 ? 'Robinhood Chain' : 'Robinhood testnet';
+    if (!W()) {
+      amt.innerHTML = `<small>${net}</small><b>${walletError() ? 'Wallet error' : 'Wallet loading…'}</b>`;
+      btn.textContent = 'Details'; btn.dataset.act = 'menu';
+    } else if (C.w && C.w.authenticated && !C.w.address) {
+      amt.innerHTML = `<small>${net}</small><b>Setting up wallet…</b>`;
+      btn.textContent = 'Sign in'; btn.dataset.act = 'login';
+    } else if (!C.w || !C.w.authenticated || !C.w.address) {
+      amt.innerHTML = `<small>${net}</small><b>Not signed in</b>`;
+      btn.textContent = 'Sign in'; btn.dataset.act = 'login';
+    } else {
+      amt.innerHTML = `<small>${short(C.w.address)}</small><b>${C.bal == null ? '…' : fmt4(C.bal)} ${unit()}</b>`;
+      btn.textContent = C.bal != null && C.bal < parseEth('0.002') ? `Add ${unit()}` : 'Wallet'; btn.dataset.act = 'wallet';
+    }
+  }
+  const fmt4 = (w) => { const s = fmtEth(w); const [a, b = ''] = s.split('.'); return b ? `${a}.${b.slice(0, 4)}` : a; };
+  // the pill's button belongs to real money once the server offers it
+  $('#faucet').addEventListener('click', (e) => {
+    if (!C.cfg || !C.privy) return; // demo faucet handler in 90_game
+    e.stopImmediatePropagation();
+    const act = e.currentTarget.dataset.act;
+    if (act === 'login') W() && W().login();
+    else if (GAME.screen === 'match') return; // not mid-match
+    else if (act === 'menu' && !W()) openSetup();
+    else openWallet();
+  }, true);
+
+  // ── one-time confirmation after a player's first sign-in: 21+ and entertainment only.
+  // Remembered on this device, and on the server once they sign in for a cash match (it's part of the signed message).
+  const CONSENT_TEXT = 'I confirm I am 21 years of age or older.\nI understand this game is for entertainment purposes only.';
+  const ckey = (a) => 'gh-consent:' + String(a).toLowerCase();
+  const consentAsked = new Set();
+  function hasConsent(a) { if (!a) return false; if (C.consentOk === a.toLowerCase()) return true; try { return !!localStorage.getItem(ckey(a)); } catch { return false; } }
+  async function checkConsent() {
+    const a = C.w && C.w.authenticated && C.w.address; if (!a || hasConsent(a)) return;
+    if (!consentAsked.has(a)) {
+      consentAsked.add(a);
+      try { if ((await (await fetch('/api/consent/' + a)).json()).consented) { remember(a); return; } } catch {}
+    }
+    if (!hasConsent(a) && GAME.screen !== 'match' && GAME.screen !== 'consent' && GAME.screen !== 'results') openConsent();
+  }
+  function remember(a) { C.consentOk = a.toLowerCase(); try { localStorage.setItem(ckey(a), new Date().toISOString()); } catch {} }
+  function consentCard() {
+    return `<div class="card lobby">
+      <h2>Before you play</h2>
+      <p>Grindhouse matches use ETH on Robinhood Chain. Please confirm both to continue.</p>
+      <label class="check"><input type="checkbox" id="cAge"><span>I am 21 years of age or older.</span></label>
+      <label class="check"><input type="checkbox" id="cFun"><span>I understand this game is for entertainment purposes only.</span></label>
+      <div class="row" style="gap:8px"><button class="btn primary big" id="consentOk" disabled>Continue</button><button class="btn ghost small" id="cashLogout">Sign out</button></div>
+      <p class="fine" style="padding:0">You'll only be asked once.</p>
+    </div>`;
+  }
+  function openConsent() {
+    if (GAME.screen !== 'consent') C.back = GAME.screen;
+    GAME.screen = 'consent'; showOverlay(consentCard());
+  }
+  function goBack() {
+    const b = C.back; C.co.confirm = false;
+    if (b === 'cashLobby' && C.lobby) { GAME.screen = 'cashLobby'; paint(lobbyCard()); }
+    else if (b === 'cashSetup' || b === 'cashLobby') { GAME.screen = 'cashSetup'; paint(setupCard()); }
+    else if (b === 'cashWallet') { GAME.screen = 'cashWallet'; lastHtml = ''; paint(walletCard()); }
+    else goHome();
+  }
+  $('#ov').addEventListener('change', (e) => {
+    if (e.target.id !== 'cAge' && e.target.id !== 'cFun') return;
+    const ok = document.getElementById('consentOk'); if (ok) ok.disabled = !(document.getElementById('cAge').checked && document.getElementById('cFun').checked);
+  });
+
+  // ── screens
+  function walletBlock() {
+    if (!W()) return walletError() ? `<div class="notice"><b>The wallet couldn't start</b><span>${esc(walletError())}</span><span>Reload the page. If it keeps happening, please send a screenshot of this message.</span></div>` : `<p class="label">Loading wallet…</p>`;
+    if (!C.w || !C.w.ready) return `<p class="label">Loading wallet…</p>`;
+    if (!C.w.authenticated) return `<button class="btn primary big" id="cashLogin">Sign in to play</button><p class="fine" style="padding:0">Google or email. We create a game wallet for you. No MetaMask, no browser extension, nothing to install.</p>`;
+    if (!C.w.address) return `<p class="label">Setting up your game wallet…</p><button class="btn ghost small" id="cashLogin" style="justify-self:start">Stuck? Sign in again</button>`;
+    const stake = parseEth(C.stake), low = C.bal != null && C.bal < stake + GAS_BUFFER;
+    const fund = `<div class="notice"><b>Add ${unit()} to play</b><span>You need ${C.stake} ${unit()} for the stake plus a little for network fees.</span><button class="btn primary small" id="cashWallet" style="justify-self:start">Add ${unit()}</button></div>`;
+    return `${low ? fund : ''}
+      <button class="btn primary big" id="cashFind" ${low || C.busy ? 'disabled' : ''}>${C.busy || `Find a ${C.size}-player lobby`}</button>
+      <div class="row" style="gap:8px"><span class="label">Game wallet · ${C.bal == null ? '…' : fmt4(C.bal)} ${unit()}</span><button class="btn ghost small" id="cashWallet">Wallet · cash out</button></div>`;
+  }
+  // ── the game wallet: add ETH (send to its address) · cash out (send anywhere) · export key · sign out
+  function walletCard() {
+    const net = C.cfg && C.cfg.chainId === 4663 ? 'Robinhood Chain' : 'Robinhood Chain testnet', o = C.co;
+    if (!W() || !C.w || !C.w.authenticated || !C.w.address) return `<div class="card lobby"><h2>Your game wallet</h2>${walletBlock()}<button class="btn ghost small" id="walletBack" style="justify-self:start">Back</button></div>`;
+    const txl = (h) => h && W().explorerTx(h) ? ` <a href="${W().explorerTx(h)}" target="_blank" rel="noopener">view on explorer ↗</a>` : '';
+    const amtShown = o.amt === 'max' ? 'Max' : o.amt;
+    const cashout = o.confirm
+      ? `<div class="notice"><b>Send ${o.amt === 'max' ? `everything (about ${fmt4(C.bal || 0n)} ${unit()}, minus the network fee)` : `${esc(o.amt)} ${unit()}`}?</b>
+          <span>To <code style="word-break:break-all">${esc(o.to)}</code></span><span>This can't be undone. Double-check the address is on ${net}.</span>
+          <div class="row" style="gap:8px"><button class="btn primary" id="coGo" ${o.busy ? 'disabled' : ''}>${o.busy || 'Yes, send it'}</button>${o.busy ? '' : '<button class="btn ghost" id="coCancel">Cancel</button>'}</div></div>`
+      : `<input class="field" id="coTo" placeholder="Send to address (0x…)" autocomplete="off" spellcheck="false" value="${esc(o.to)}">
+         <div class="row" style="gap:8px"><input class="field" id="coAmt" placeholder="Amount in ${unit()}" inputmode="decimal" autocomplete="off" value="${esc(amtShown)}" style="flex:1"><button class="btn ghost small" id="coMax">Max</button><button class="btn primary" id="coSend">Send</button></div>`;
+    return `<div class="card lobby">
+      <div class="row" style="justify-content:space-between"><h2>Your game wallet</h2><span class="label">${net}</span></div>
+      <div class="receipt"><div class="r win"><span>Balance</span><b>${C.bal == null ? '…' : fmt4(C.bal)} ${unit()}</b></div></div>
+      <div class="cols">
+        <div style="display:grid;gap:10px;align-content:start">
+          <span class="label">Add ${unit()}</span>
+          <p class="fine" style="padding:0;margin:0">Send ETH on <span style="color:var(--text);font-weight:700">${net}</span> to your game wallet, from any wallet or exchange. Sending on any other network loses it.</p>
+          <div class="addr"><code>${esc(C.w.address)}</code><button class="btn ghost small" id="cashCopy">Copy</button></div>
+          ${C.cfg && C.cfg.chainId !== 4663 ? `<a class="btn ghost small" href="${FAUCET}" target="_blank" rel="noopener" style="justify-self:start">Free test ETH: Robinhood faucet ↗</a>` : ''}
+        </div>
+        <div style="display:grid;gap:10px;align-content:start">
+          <span class="label">Cash out · any time</span>
+          ${cashout}
+          ${o.err ? `<p style="color:var(--coral);margin:0">${esc(o.err)}</p>` : ''}
+          ${o.sent ? `<p style="color:var(--mint);margin:0">${esc(o.sent)}${txl(o.tx)}</p>` : ''}
+        </div>
+      </div>
+      <div class="row" style="gap:8px"><button class="btn ghost small" id="walletBack">Back</button><button class="btn ghost small" id="cashExport">Export key</button><button class="btn ghost small" id="cashLogout">Sign out</button></div>
+      <ul class="fine"><li>This wallet is yours. Grindhouse never holds its keys and can't move your ETH; only you can, from here.</li><li>Stakes go from this wallet into the escrow contract, and winnings come back to it.</li></ul>
+    </div>`;
+  }
+  function openWallet() {
+    if (GAME.screen !== 'cashWallet') C.back = GAME.screen;
+    C.co.err = ''; C.co.sent = ''; C.co.confirm = false; GAME.screen = 'cashWallet'; lastHtml = ''; paint(walletCard());
+  }
+  function closeWallet() { if (C.back === 'cashWallet') C.back = 'home'; goBack(); }
+  function cashOutCheck() {
+    const o = C.co; o.err = ''; o.sent = '';
+    const to = o.to.trim();
+    if (!/^0x[0-9a-fA-F]{40}$/.test(to)) return o.err = 'Paste the full address you want to send to (0x followed by 40 characters).';
+    if (C.w && to.toLowerCase() === C.w.address.toLowerCase()) return o.err = "That's this game wallet's own address.";
+    if (C.cfg && C.cfg.escrow && to.toLowerCase() === C.cfg.escrow.toLowerCase()) return o.err = "That's the game's escrow contract; send to your own wallet instead.";
+    if (o.amt !== 'max') {
+      if (!/^\d*\.?\d+$/.test(o.amt.trim())) return o.err = 'Enter an amount, or tap Max.';
+      if (C.bal != null && parseEth(o.amt.trim()) > C.bal) return o.err = `That's more than your balance. Tap Max to send everything.`;
+    }
+    o.to = to; o.confirm = true;
+  }
+  async function cashOut() {
+    const o = C.co; o.busy = 'Sending…'; rerender();
+    try {
+      o.tx = await W().send(o.to, o.amt === 'max' ? 'max' : o.amt.trim());
+      o.busy = 'Confirming on chain…'; rerender();
+      if ((await W().waitTx(o.tx)) !== 'success') throw new Error('The transfer failed on chain.');
+      o.sent = 'Sent ✓'; o.amt = ''; playSfx('pickup');
+    } catch (e) { o.err = errText(e); }
+    o.busy = ''; o.confirm = false; refresh();
+  }
+  function setupCard() {
+    const tiers = (C.cfg && C.cfg.tiers) || TIERS, sizes = (C.cfg && C.cfg.sizes) || SIZES;
+    const stake = parseEth(C.stake || tiers[0]), { pot, house, champ } = splitPot(stake, 8);
+    return `<div class="card lobby">
+      <div class="row" style="justify-content:space-between"><h2>Play for ${unit()}</h2><span class="label">${C.cfg && C.cfg.chainId === 4663 ? 'Robinhood Chain' : 'Robinhood Chain testnet'} · one round · last skater standing</span></div>
+      <div class="cols">
+        <div style="display:grid;gap:12px;align-content:start">
+          <div style="display:grid;gap:6px"><span class="label">Entry stake</span><div class="seg">${tiers.map((t) => `<button class="${t === C.stake ? 'sel' : ''}" data-ctier="${t}">${t}<small>${unit()}</small></button>`).join('')}</div></div>
+          <div class="receipt"><div class="r"><span>Lobby</span><b>2–8 skaters</b></div><div class="r"><span>Starts</span><b>at 8, or ${Math.round(((C.cfg && C.cfg.fillSeconds) || 60))} s after the 2nd entry</b></div></div>
+          <div class="receipt">
+            <div class="r"><span>Your stake</span><b>${fmtEth(stake)} ${unit()}</b></div>
+            <div class="r"><span>Full lobby pot · 8 × ${fmtEth(stake)}</span><b>${fmtEth(pot)} ${unit()}</b></div>
+            <div class="r"><span>House fee · 10%</span><b>${fmtEth(house)} ${unit()}</b></div>
+            <div class="r win"><span>Winner takes · 90%</span><b>${fmtEth(champ)}</b></div>
+          </div>
+        </div>
+        <div style="display:grid;gap:12px;align-content:start">
+          ${walletBlock()}
+          ${C.err ? `<p style="color:var(--coral)">${esc(C.err)}</p>` : ''}
+          <button class="btn ghost small" id="back" style="justify-self:start">Back</button>
+          <ul class="fine"><li>Your stake goes into the Grindhouse escrow contract, not to us. Leave before the lobby locks for a full refund.</li><li>Real players only. If the lobby doesn't fill in 10 minutes, everyone is refunded automatically.</li><li>The server decides the winner; two result co-signers replay the whole match before the escrow pays the winner automatically. Ties at 60 s: health › eliminations › damage › seeded order.</li><li>Disconnecting doesn't refund your stake: your skater stays in the match until you reconnect.</li></ul>
+        </div>
+      </div>
+    </div>`;
+  }
+  function statusHtml(L) {
+    const left = Math.max(0, Math.ceil((L.deadlineMs - (performance.now() - L.at)) / 1000));
+    const mm = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+    const sLeft = L.startsInMs == null ? null : Math.max(0, Math.ceil((L.startsInMs - (performance.now() - L.at)) / 1000));
+    const starting = sLeft != null ? ` · starts in ${sLeft}s` : '';
+    const status = L.state === 'opening' ? 'Opening the lobby on Robinhood Chain…' : L.state === 'locking' ? 'Locking the roster on chain…' : L.state === 'cancelled' ? 'The lobby did not fill. Every deposit is being refunded automatically.' : L.state === 'failed' ? `Could not open the lobby: ${esc(L.error || 'unknown error')}` : L.youDeposited ? `You're in · ${L.seats.length} / ${L.size}${starting || ` · waiting for at least one more · closes in ${mm}`}` : `Deposit to take a seat · ${L.seats.length} / ${L.size} in${starting || ` · closes in ${mm}`}`;
+    const txLink = C.tx && W() && W().explorerTx(C.tx) ? ` <a href="${W().explorerTx(C.tx)}" target="_blank" rel="noopener">view tx ↗</a>` : '';
+    return status + txLink;
+  }
+  function lobbyCard() {
+    const L = C.lobby; if (!L) return '';
+    const seats = Array.from({ length: L.size }, (_, i) => {
+      const s = L.seats[i];
+      return s ? `<div class="seat on${s.you ? ' you' : ''}"><img src="${portrait(i)}" alt=""><span class="nm">${s.you ? 'You' : esc(short(s.wallet))}</span><span class="label" style="color:var(--mint)">Deposited</span></div>`
+        : `<div class="seat"><div class="ghost">?</div><span class="nm" style="color:var(--dim)">Open seat</span></div>`;
+    }).join('');
+    const status = statusHtml(L), txLink = '';
+    return `<div class="card lobby">
+      <div class="row" style="justify-content:space-between"><h2>${L.state === 'locking' ? 'Starting…' : 'Real-money lobby'}</h2><span class="label">up to ${L.size} skaters · ${L.stake} ${unit()} each · winner takes 90%</span></div>
+      <div class="seats">${seats}</div>
+      <p id="cashStatus">${status}${txLink}</p>
+      ${C.err ? `<p style="color:var(--coral)">${esc(C.err)}</p>` : ''}
+      <div class="row">
+        ${L.state === 'open' && !L.youDeposited ? `<button class="btn primary big" id="cashDeposit" ${C.busy ? 'disabled' : ''}>${C.busy || `Deposit ${L.stake} ${unit()}`}</button>` : ''}
+        ${L.youDeposited && L.state === 'open' ? `<button class="btn ghost" id="cashLeave" ${C.busy ? 'disabled' : ''}>${C.busy || 'Leave · full refund'}</button>` : ''}
+        ${!L.youDeposited && L.state !== 'locking' ? `<button class="btn ghost" id="cashBack">Back</button>` : ''}
+      </div>
+      <p class="fine">Escrow <code>${esc(short(L.escrow))}</code> · match <code>${esc(L.matchId.slice(0, 10))}…</code></p>
+    </div>`;
+  }
+  // tick only the countdown text: redrawing the whole card every second replays its pop-in animation (flicker)
+  setInterval(() => { if (GAME.screen === 'cashLobby' && C.lobby && C.lobby.state === 'open') { const el = document.getElementById('cashStatus'); if (el) el.innerHTML = statusHtml(C.lobby); } }, 1000);
+
+  // ── actions
+  // walk the error's cause chain: viem wraps the wallet's real reason ("An unknown RPC error occurred" alone says nothing)
+  const errText = (e) => {
+    console.error('[grindhouse wallet]', e);
+    const parts = []; let x = e;
+    for (let i = 0; x && i < 5; i++, x = x.cause) { const m = String(x.details || x.shortMessage || x.message || x).replace(/^Error:\s*/, ''); if (m && !parts.includes(m)) parts.push(m + (x.code != null ? ` (${x.code})` : '')); }
+    const m = parts.join(' · ') || String(e);
+    return /reject|denied|cancel/i.test(m) ? 'Cancelled in your wallet.' : m.slice(0, 300);
+  };
+  async function verifyAndQueue() {
+    if (!hasConsent(C.w.address)) return openConsent();
+    C.err = ''; C.busy = 'Connecting…'; rerender();
+    try {
+      await NET.connectAsync();
+      if (!C.verified) {
+        C.busy = 'Checking your wallet…'; rerender();
+        const addr = C.w.address, nonce = NET.state.nonce;
+        const msg = `Sign in to Grindhouse\n\nWallet: ${addr}\nNonce: ${nonce}\nChain: ${C.cfg.chainId}\n\n${CONSENT_TEXT}\n\nThis only proves you own this wallet. It costs nothing and moves no funds.`;
+        const sig = await W().sign(msg);
+        const ok = await NET.request({ t: 'auth', address: addr, sig }, ['authOk', 'authFail']);
+        if (ok.t !== 'authOk') throw new Error(ok.msg || 'Wallet check failed');
+        C.verified = ok.wallet;
+      }
+      C.busy = 'Finding a lobby…'; rerender();
+      NET.hello();
+      NET.send({ t: 'queue', mode: 'cash', size: 8, stake: C.stake });
+    } catch (e) { C.err = errText(e); C.busy = ''; rerender(); }
+  }
+  async function deposit() {
+    const L = C.lobby; C.err = ''; C.busy = 'Depositing…'; paint(lobbyCard());
+    try {
+      C.tx = await W().deposit(L.matchId, L.stake);
+      C.busy = 'Depositing…'; paint(lobbyCard());
+      const st = await W().waitTx(C.tx);
+      if (st !== 'success') throw new Error('The deposit transaction failed.');
+      L.youDeposited = true; playSfx('pickup');
+    } catch (e) { C.err = errText(e); }
+    C.busy = ''; refresh(); paint(lobbyCard());
+  }
+  async function leave() {
+    const L = C.lobby; C.err = ''; C.busy = 'Leaving…'; paint(lobbyCard());
+    try {
+      C.tx = await W().leave(L.matchId); C.busy = 'Refunding…'; paint(lobbyCard());
+      if ((await W().waitTx(C.tx)) !== 'success') throw new Error('The refund transaction failed.');
+      NET.send({ t: 'leaveCash' }); C.lobby = null; C.busy = ''; refresh(); GAME.screen = 'cashSetup'; showOverlay(setupCard()); return;
+    } catch (e) { C.err = errText(e); }
+    C.busy = ''; paint(lobbyCard());
+  }
+  $('#ov').addEventListener('click', (e) => {
+    const t = e.target.closest('button'); if (!t) return;
+    if (t.id === 'goCashReal') openSetup();
+    else if (t.dataset.ctier) { C.stake = t.dataset.ctier; showOverlay(setupCard()); }
+        else if (t.id === 'cashLogin') W() && W().login();
+    else if (t.id === 'cashLogout') { W() && W().logout(); C.verified = null; if (GAME.screen === 'cashWallet' || GAME.screen === 'consent') { GAME.screen = 'home'; showOverlay(homeCard()); } }
+    else if (t.id === 'consentOk') { if (document.getElementById('cAge')?.checked && document.getElementById('cFun')?.checked) { remember(C.w.address); goBack(); } }
+    else if (t.id === 'cashWallet') openWallet();
+    else if (t.id === 'walletBack') closeWallet();
+    else if (t.id === 'coMax') { C.co.amt = 'max'; rerender(); }
+    else if (t.id === 'coSend') { cashOutCheck(); rerender(); }
+    else if (t.id === 'coCancel') { C.co.confirm = false; rerender(); }
+    else if (t.id === 'coGo') cashOut();
+    else if (t.id === 'cashExport') W() && W().exportWallet().catch(() => {});
+    else if (t.id === 'cashCopy') { navigator.clipboard?.writeText(C.w.address); t.textContent = 'Copied'; }
+    else if (t.id === 'cashFind') verifyAndQueue();
+    else if (t.id === 'cashDeposit') deposit();
+    else if (t.id === 'cashLeave') leave();
+    else if (t.id === 'cashBack') { NET.send({ t: 'leaveCash' }); C.lobby = null; GAME.screen = 'cashSetup'; showOverlay(setupCard()); }
+  });
+
+  $('#ov').addEventListener('input', (e) => {
+    if (e.target.id === 'coTo') C.co.to = e.target.value;
+    else if (e.target.id === 'coAmt') C.co.amt = /^max$/i.test(e.target.value) ? 'max' : e.target.value;
+  });
+  // ── server messages (routed from NET)
+  function onLobby(m) {
+    C.lobby = { ...m, at: performance.now() }; C.busy = C.busy === 'Finding a lobby…' ? '' : C.busy;
+    if (GAME.screen === 'cashSetup' || GAME.screen === 'cashLobby') { GAME.screen = 'cashLobby'; paint(lobbyCard()); }
+  }
+  function onMatch(m) { C.match = { matchId: C.lobby ? C.lobby.matchId : null, stake: m.stake, size: m.size }; C.settle = null; }
+  // ── after the match: show settlement progress on the champion card
+  async function pollSettlement() {
+    const id = C.match && C.match.matchId; if (!id || GAME.screen !== 'match') return;
+    try {
+      const s = await (await fetch('/api/match/' + id)).json(); C.settle = s;
+      const el = document.getElementById('settleLine'); if (el) el.innerHTML = settleText(s);
+      if (s.status !== 'SETTLED' && s.status !== 'REFUNDED') setTimeout(pollSettlement, 1500);
+      else refresh();
+    } catch { setTimeout(pollSettlement, 4000); }
+  }
+  function settleText(s) {
+    if (!s) return 'Paying out… the co-signers are checking the match.';
+    if (s.status === 'LOCKED') return 'Paying out… independent co-signers are replaying the match (a few seconds).';
+    if (s.status === 'RESULT_FINAL') { const at = (Number(s.resultSubmittedAt) + Number(s.disputeWindow)) * 1000; return `Result is on chain. Payout after the dispute window (about ${new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}).`; }
+    if (s.status === 'SETTLED') return `Paid out ✓ — 90% to the winner's game wallet, 10% to the house.${s.txHash && W() && W().explorerTx(s.txHash) ? ` <a href="${W().explorerTx(s.txHash)}" target="_blank" rel="noopener">view on explorer ↗</a>` : ''}`;
+    return 'Status: ' + s.status;
+  }
+  function championExtra(w) {
+    if (!C.match) return '';
+    setTimeout(pollSettlement, 1000);
+    const stake = parseEth(C.match.stake), { pot, house, champ } = splitPot(stake, C.match.size), mine = w && w.i === GAME.me;
+    return `<div class="receipt">
+        <div class="r"><span>Pot · ${C.match.size} × ${fmtEth(stake)}</span><b>${fmtEth(pot)} ${unit()}</b></div>
+        <div class="r"><span>Winner 90%</span><b>${fmtEth(champ)} ${unit()}</b></div>
+        <div class="r"><span>House 10%</span><b>${fmtEth(house)} ${unit()}</b></div>
+        <div class="r win"><span>Your result</span><b style="color:${mine ? 'var(--mint)' : 'var(--coral)'}">${mine ? `+${fmtEth(champ - stake)}` : `−${fmtEth(stake)}`} ${unit()}</b></div>
+      </div>
+      <div class="steps"><div class="step" id="settleLine">${settleText(C.settle)}</div></div>`;
+  }
+  loadConfig();
+  function openSetup() { C.match = null; C.lobby = null; C.err = ''; C.busy = ''; C.showFund = false; GAME.screen = 'cashSetup'; showOverlay(setupCard()); }
+  return { enabled, pending, openWallet, walletError, onLobby, onMatch, championExtra, unit, openSetup, get state() { return C; }, refresh, isCashMatch: () => !!C.match };
+})();

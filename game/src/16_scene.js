@@ -1,0 +1,122 @@
+// ───────────────────────── SCENE: skaters, pickups, projectiles + the chase camera (bible §5) ─────────────────────────
+const RARITY_COL = { common: '#E8DDBD', uncommon: '#B4E64A', rare: '#36DCE8', legendary: '#FF9B36', starter: '#E8DDBD' };
+const CAMR = { yaw: 0, pitch: -0.12, pos: null, look: null, dist: 4, fov: 72, target: -1, mode: 'follow', orbit: 0, cine: null };
+const RIGS = new Map();
+function clearScene() { for (const r of RIGS.values()) GFX.scene.remove(r.root); RIGS.clear(); }
+// view(s) → { x, y, z, yaw, aimYaw, aimPitch } (interpolated / predicted pose)
+function syncDynamic(R, dt, view) {
+  const T = THREE, B = GFX.built;
+  for (const s of R.sk) {
+    let r = RIGS.get(s.i);
+    if (!r || r.look !== s.look) { if (r) GFX.scene.remove(r.root); r = makeSkaterRig(s.look); RIGS.set(s.i, r); GFX.scene.add(r.root); }
+    const v = view(s);
+    poseRig(r, v.s || s, dt, v);
+    r.root.visible = s.alive || s.y > -30;
+    // grind sparks, boost dust, burning
+    if (s.alive && s.mode === MODE.GRIND && Math.random() < 0.9) fxSpark(v.x, v.y + 0.05, v.z, s.rail && s.rail.live ? 0x7ff6ff : 0xffc46b);
+    if (s.alive && s.boostT > 0 && s.mode === MODE.GROUND && Math.random() < 0.4) fxBurst(v.x, v.y, v.z, 'dust', 1);
+    if (s.alive && s.burn > 0 && Math.random() < 0.6) fxFlame(v.x + R3(0.3), v.y + 0.5 + Math.random(), v.z + R3(0.3));
+    if (s.alive && s.adren >= 100 && Math.random() < 0.25) part(v.x + R3(0.4), v.y + 0.4 + Math.random() * 1.4, v.z + R3(0.4), { vy: 1.5, life: 0.5, s0: 0.15, s1: 0.02, col: 0xb4e64a, add: true, tex: GFX.tex.spark });
+  }
+  // pickups: pedestal + rarity beam + floating weapon; telegraphed as a ghost beam before they unlock
+  const seen = new Set();
+  for (const p of R.picks) {
+    seen.add(p.id);
+    let o = B.picks.get(p.id);
+    if (!o) {
+      o = new T.Group(); const col = RARITY_COL[p.rarity] || '#E8DDBD';
+      const ped = new T.Mesh(new T.CylinderGeometry(0.55, 0.7, 0.16, 16), toon('#22292B')); ped.position.y = 0.08; o.add(ped);
+      const rim = new T.Mesh(new T.TorusGeometry(0.6, 0.05, 6, 24), new T.MeshBasicMaterial({ color: col })); rim.rotation.x = Math.PI / 2; rim.position.y = 0.17; o.add(rim);
+      const beam = new T.Mesh(new T.CylinderGeometry(0.12, 0.45, 7, 10, 1, true), new T.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.28, depthWrite: false, blending: T.AdditiveBlending, side: T.DoubleSide }));
+      beam.position.y = 3.5; o.add(beam);
+      const w = weaponMesh(p.w, 1.5); w.position.y = 1.0; o.add(w);
+      o.userData = { beam, w, rim };
+      o.position.set(p.x, p.y, p.z); GFX.arena.add(o); B.picks.set(p.id, o);
+    }
+    const ready = R.t >= p.t0, ud = o.userData;
+    ud.w.visible = ready; ud.w.rotation.y += dt * 1.6; ud.w.position.y = 1.0 + Math.sin(GFX.clock * 3 + p.id) * 0.08;
+    ud.beam.material.opacity = ready ? 0.28 : 0.1 + 0.15 * (Math.sin(GFX.clock * 12) * 0.5 + 0.5);
+    ud.rim.scale.setScalar(ready ? 1 : 0.6 + 0.4 * ((GFX.clock * 2) % 1));
+  }
+  for (const [id, o] of B.picks) if (!seen.has(id)) { GFX.arena.remove(o); B.picks.delete(id); }
+  // projectiles
+  const live = new Set();
+  for (const p of R.proj) {
+    live.add(p.id);
+    let o = B.proj.get(p.id);
+    if (!o) { o = weaponMesh(p.k === 'rocket' ? 'rocket' : p.k === 'buzzsaw' ? 'buzzsaw' : p.k, p.k === 'rocket' ? 0.7 : 1.4); GFX.arena.add(o); B.proj.set(p.id, o); }
+    o.position.set(p.x, p.y, p.z);
+    if (p.k === 'rocket' || p.k === 'buzzsaw') { o.lookAt(p.x + p.vx, p.y + p.vy, p.z + p.vz); if (p.k === 'rocket') part(p.x, p.y, p.z, { life: 0.5, s0: 0.3, s1: 0.9, col: Math.random() < 0.5 ? 0xff9b36 : 0x8a8478, add: false }); }
+    else { o.rotation.x += dt * 9; o.rotation.z += dt * 5; if (p.k === 'molotov') fxFlame(p.x, p.y + 0.15, p.z); if (p.k === 'grenade' || p.k === 'pipebomb') { const w = WEAPONS[p.k]; if (w.fuse - p.t < 0.6 && Math.floor(p.t * 12) % 2) fxSpark(p.x, p.y + 0.1, p.z, 0xff5c69); } }
+  }
+  for (const [id, o] of B.proj) if (!live.has(id)) { GFX.arena.remove(o); B.proj.delete(id); }
+  // molotov fire zones
+  for (const f of R.fires) for (let k = 0; k < 2; k++) { const a = Math.random() * 6.28, d = Math.sqrt(Math.random()) * f.r; fxFlame(f.x + Math.cos(a) * d, f.y + 0.1, f.z + Math.sin(a) * d); }
+}
+
+// ── the chase camera: velocity-aware damping, dynamic FOV 68–82, shoulder shift while aiming,
+// occlusion pull-in, never below the ground (bible §5)
+function updateCamera(R, dt, tv, opts = {}) {
+  const T = THREE, cam = GFX.cam;
+  if (!CAMR.pos) { CAMR.pos = new T.Vector3(tv.x, tv.y + 3, tv.z - 5); CAMR.look = new T.Vector3(tv.x, tv.y + 1.4, tv.z); }
+  const sp = Math.hypot(tv.vx || 0, tv.vz || 0), aiming = !!opts.aim;
+  const yaw = opts.yaw ?? CAMR.yaw, pitch = opts.pitch ?? CAMR.pitch;
+  let dist = aiming ? 2.7 : 3.4 + Math.min(1, sp / 14) * 1.0;
+  if (opts.dist) dist = opts.dist;
+  const fov = (aiming ? 64 : 68 + Math.min(1, sp / 16) * 14) * (SETTINGS.fov || 1);
+  CAMR.fov += (fov - CAMR.fov) * Math.min(1, dt * 5);
+  const tgt = new T.Vector3(tv.x, tv.y + 1.4, tv.z);
+  const cp = Math.cos(pitch), fx = Math.sin(yaw) * cp, fy = Math.sin(pitch), fz = Math.cos(yaw) * cp;
+  const rx = -Math.cos(yaw), rz = Math.sin(yaw), sh = aiming ? 0.6 : 0.25;
+  const pivot = new T.Vector3(tgt.x + rx * sh, tgt.y + (aiming ? 0.1 : 0), tgt.z + rz * sh);
+  // occlusion: pull the camera in front of whatever is between it and the skater
+  let d = dist;
+  if (R && R.W) { const hit = SIM0.raycast(R.W, pivot.x, pivot.y, pivot.z, -fx, -fy, -fz, dist); d = Math.max(0.9, Math.min(dist, hit - 0.25)); }
+  const want = new T.Vector3(pivot.x - fx * d, pivot.y - fy * d, pivot.z - fz * d);
+  if (R && R.W) { const gy = SIM0.groundAt(R.W, want.x, want.z, want.y + 0.5); if (gy > -1e8 && want.y < gy + 0.35) want.y = gy + 0.35; }
+  const k = 1 - Math.exp(-dt * (opts.snap ? 60 : 16 + sp * 0.8));
+  CAMR.pos.lerp(want, k);
+  // never let the lag put a wall between us
+  if (R && R.W && CAMR.pos.distanceTo(want) > 0.6) CAMR.pos.copy(want);
+  cam.position.copy(CAMR.pos);
+  const sk = PFX.shake * 0.25; cam.position.x += R3(sk); cam.position.y += R3(sk); cam.position.z += R3(sk);
+  cam.lookAt(pivot.x + fx * 10, pivot.y + fy * 10, pivot.z + fz * 10);
+  cam.fov = CAMR.fov; cam.updateProjectionMatrix();
+  // sun follows the action so shadows stay crisp near the camera
+  const sd = GFX.sunDir || new T.Vector3(0.5, 0.8, 0.3);
+  GFX.sun.position.set(tv.x + sd.x * 80, tv.y + sd.y * 80, tv.z + sd.z * 80); GFX.sun.target.position.set(tv.x, tv.y, tv.z); GFX.sun.target.updateMatrixWorld();
+  if (GFX.sky) GFX.sky.position.copy(cam.position);
+  AUDIO.listener.x = cam.position.x; AUDIO.listener.y = cam.position.y; AUDIO.listener.z = cam.position.z; AUDIO.listener.yaw = yaw;
+  CAMR.yaw = yaw; CAMR.pitch = pitch;
+}
+// free orbit around a point (menus, spectating, results)
+function orbitCamera(R, dt, x, y, z, radius = 9, height = 4, speed = 0.15) {
+  CAMR.orbit += dt * speed;
+  const T = THREE, cam = GFX.cam, a = CAMR.orbit;
+  const want = new T.Vector3(x + Math.sin(a) * radius, y + height, z + Math.cos(a) * radius);
+  if (!CAMR.pos) CAMR.pos = want.clone();
+  CAMR.pos.lerp(want, 1 - Math.exp(-dt * 3));
+  cam.position.copy(CAMR.pos); cam.lookAt(x, y + 1, z);
+  cam.fov = 60; cam.updateProjectionMatrix();
+  const sd = GFX.sunDir || new T.Vector3(0.5, 0.8, 0.3);
+  GFX.sun.position.set(x + sd.x * 80, y + sd.y * 80, z + sd.z * 80); GFX.sun.target.position.set(x, y, z); GFX.sun.target.updateMatrixWorld();
+  if (GFX.sky) GFX.sky.position.copy(cam.position);
+  AUDIO.listener.x = cam.position.x; AUDIO.listener.y = cam.position.y; AUDIO.listener.z = cam.position.z; AUDIO.listener.yaw = a + Math.PI;
+}
+// crosshair convergence: shots leave the chest and land where the crosshair points
+function aimFrom(R, me) {
+  const cam = GFX.cam, T = THREE, dir = new T.Vector3(); cam.getWorldDirection(dir);
+  const o = cam.position;
+  let d = SIM0.raycast(R.W, o.x, o.y, o.z, dir.x, dir.y, dir.z, 90);
+  for (const s of R.sk) {
+    if (!s.alive || s.i === me.i) continue;
+    const ox = s.x - o.x, oy = s.y + 1 - o.y, oz = s.z - o.z, t = ox * dir.x + oy * dir.y + oz * dir.z;
+    if (t <= 0 || t >= d) continue;
+    const px = o.x + dir.x * t - s.x, py = o.y + dir.y * t - (s.y + 1), pz = o.z + dir.z * t - s.z;
+    if (Math.hypot(px, py * 0.6, pz) < 0.6) d = t;
+  }
+  const px = o.x + dir.x * d, py = o.y + dir.y * d, pz = o.z + dir.z * d;
+  const cx = me.x, cy = me.y + 1.35, cz = me.z, dx = px - cx, dy = py - cy, dz = pz - cz, h = Math.hypot(dx, dz);
+  if (h < 1.2) return { yaw: CAMR.yaw, pitch: CAMR.pitch };
+  return { yaw: Math.atan2(dx, dz), pitch: Math.max(-1.0, Math.min(1.0, Math.atan2(dy, h))) };
+}
