@@ -26,7 +26,11 @@ jobs:
           git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "wallet debug build ${GITHUB_SHA}"
           git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-wallet-debug
       - name: shared rules + settlement suites (single-round ledgers, co-signer refusals, refunds) on anvil
-        run: npm test
+        shell: bash
+        run: |
+          set +e; npm test > /tmp/suite.log 2>&1; st=$?; cat /tmp/suite.log
+          grep -E "^not ok|^# (pass|fail)|Error|AssertionError|expected|actual" /tmp/suite.log | head -25 | while IFS= read -r l; do echo "::error title=suite::$l"; done
+          exit $st
       - name: determinism + network tests
         run: npm test -w @grindhouse/game
       - name: skate moves (push, ollie, kickflip, grind, quarter pipe, wallride, melee)
