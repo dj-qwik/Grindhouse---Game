@@ -25,13 +25,13 @@ function initRender() {
   GFX.scene = new T.Scene();
   GFX.cam = new T.PerspectiveCamera(74, 1, 0.08, 600);
   GFX.cam2 = new T.PerspectiveCamera(55, 300 / 180, 0.1, 200); // picture-in-picture finishing vignette
-  GFX.hemi = new T.HemisphereLight(0xcfe8ff, 0x8a7a60, 1.1); GFX.scene.add(GFX.hemi);
+  GFX.hemi = new T.HemisphereLight(0xcfe8ff, 0x9a8a70, 1.5); GFX.scene.add(GFX.hemi);
   GFX.sun = new T.DirectionalLight(0xfff1d6, 2.4); GFX.sun.castShadow = true;
   GFX.sun.shadow.mapSize.set(2048, 2048); const sc = GFX.sun.shadow.camera; sc.left = sc.bottom = -45; sc.right = sc.top = 45; sc.near = 1; sc.far = 220;
   GFX.sun.shadow.bias = -0.0006; GFX.sun.shadow.normalBias = 0.02;
   GFX.scene.add(GFX.sun, GFX.sun.target);
   // the toon ramp: three hard tones
-  const ramp = new Uint8Array([70, 150, 255, 255]);
+  const ramp = new Uint8Array([128, 196, 255, 255]);
   GFX.ramp = new T.DataTexture(ramp, 4, 1, T.RedFormat); GFX.ramp.minFilter = GFX.ramp.magFilter = T.NearestFilter; GFX.ramp.needsUpdate = true;
   for (const k of ['concrete', 'stairs', 'wood', 'tread', 'hazard', 'ribs', 'brick', 'asphalt', 'speckle', 'rust', 'tile', 'belt', 'fence', 'neon', 'blood', 'water', 'graffiti0', 'graffiti1', 'graffiti2', 'graffiti3', 'graffiti4', 'graffiti5', 'smoke', 'spark', 'deck0', 'deck1', 'deck2']) GFX.tex[k] = makeTex(k);
   addEventListener('resize', resize); resize();
@@ -167,7 +167,7 @@ function buildArena(R) {
   root.add(sky); GFX.sky = sky;
   GFX.scene.fog = new T.Fog(new T.Color(look.fog || '#E9DDBE'), 60, 210);
   const sd = look.sun || [0.5, 0.8, 0.3]; GFX.sunDir = new T.Vector3(sd[0], sd[1], sd[2]).normalize();
-  GFX.hemi.color.set(look.sky || '#cfe8ff');
+  GFX.hemi.color.set('#EEF3FF'); GFX.hemi.groundColor.set(look.ground || '#9a8a70');
   // ground: the arena floor, an outer apron to the horizon, or water / a long drop
   const half = W.half;
   if (W.floor) {
@@ -215,8 +215,8 @@ function buildArena(R) {
   const zw = new T.Mesh(new T.CylinderGeometry(1, 1, 60, 64, 1, true), new T.ShaderMaterial({
     transparent: true, depthWrite: false, side: T.DoubleSide,
     uniforms: { t: { value: 0 }, col: { value: new T.Color('#FF5C69') } },
-    vertexShader: 'varying vec2 vu; varying float vy; void main(){ vu = uv; vy = position.y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-    fragmentShader: 'uniform float t; uniform vec3 col; varying vec2 vu; varying float vy; void main(){ float s = step(0.5, fract(vu.x*90.0 + vy*0.15 - t*0.6)); float fade = clamp(1.0 - (vy+30.0)/26.0, 0.0, 1.0); gl_FragColor = vec4(col, (0.16 + 0.22*s) * fade); }',
+    vertexShader: 'varying vec2 vu; varying float vy; varying float vd; void main(){ vu = uv; vy = position.y; vec4 mv = modelViewMatrix * vec4(position,1.0); vd = -mv.z; gl_Position = projectionMatrix * mv; }',
+    fragmentShader: 'uniform float t; uniform vec3 col; varying vec2 vu; varying float vy; varying float vd; void main(){ float s = step(0.5, fract(vu.x*90.0 + vy*0.15 - t*0.6)); float fade = clamp(1.0 - (vy+30.0)/18.0, 0.0, 1.0) * smoothstep(1.5, 16.0, vd); gl_FragColor = vec4(col, (0.07 + 0.17*s) * fade); }',
   }));
   zw.position.y = 30; zw.renderOrder = 5; root.add(zw); GFX.zoneWall = zw;
   // decals pool (blood, scorch)

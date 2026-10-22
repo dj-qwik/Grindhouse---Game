@@ -39,7 +39,7 @@ function stepFx(dt) {
 const R3 = (a) => (Math.random() - 0.5) * 2 * a;
 function fxBurst(x, y, z, kind, n = 12, extra) {
   for (let k = 0; k < n; k++) {
-    if (kind === 'blood') part(x, y, z, { vx: R3(4) + (extra?.dx || 0) * 5, vy: Math.random() * 5 + 1, vz: R3(4) + (extra?.dz || 0) * 5, g: 16, life: 0.6 + Math.random() * 0.4, s0: 0.18, s1: 0.1, col: k % 3 ? 0xe0102c : 0x9c0a1e, tex: GFX.tex.smoke, fade: false });
+    if (kind === 'blood') part(x, y, z, { vx: R3(4) + (extra?.dx || 0) * 5, vy: Math.random() * 5 + 1, vz: R3(4) + (extra?.dz || 0) * 5, g: 18, life: 0.45 + Math.random() * 0.3, s0: 0.2, s1: 0.08, col: k % 3 ? 0xe0102c : 0x9c0a1e, tex: GFX.tex.smoke });
     else if (kind === 'debris') part(x + R3(2), y, z + R3(2), { vx: R3(5), vy: Math.random() * 6, vz: R3(5), g: 18, life: 1, s0: 0.3, s1: 0.2, col: k % 2 ? 0x8a7a60 : 0x5e5040, fade: false, tex: GFX.tex.spark });
     else if (kind === 'dust') part(x + R3(0.3), y + 0.05, z + R3(0.3), { vx: R3(1.2), vy: Math.random() * 0.8, vz: R3(1.2), life: 0.5, s0: 0.2, s1: 0.8, col: 0xd8ccb0 });
   }

@@ -130,7 +130,7 @@ async function boot() {
         supportedChains: [chain], // Robinhood Chain only
         loginMethods: ['google', 'email'],
         embeddedWallets: { ethereum: { createOnLogin: 'all-users' }, showWalletUIs: false },
-        appearance: { theme: 'dark', accentColor: '#FF557D', walletChainType: 'ethereum-only', showWalletLoginFirst: false, landingHeader: 'Sign in to play' },
+        appearance: { theme: 'dark', accentColor: '#B4E64A', walletChainType: 'ethereum-only', showWalletLoginFirst: false, landingHeader: 'Sign in to play' },
       }}
     >
       <Bridge cfg={conf.cash} chain={chain} pub={pub} />
