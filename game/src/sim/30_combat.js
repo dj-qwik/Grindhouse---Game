@@ -4,9 +4,10 @@
 // player aimed at is what they hit (bounded at 15 ticks = 250 ms).
 const MELEE_POOL = ['pipe', 'katana', 'cleaver', 'whip', 'baton', 'hammer'];
 const LOOT = {
-  common: ['pipe', 'whip', 'baton', 'nailgun', 'smg', 'molotov'],
-  uncommon: ['katana', 'cleaver', 'sawoff', 'revolver', 'grenade'],
-  rare: ['pipebomb', 'buzzsaw', 'hammer'],
+  // gun-heavy: two of every three drops shoot
+  common: ['nailgun', 'smg', 'nailgun', 'smg', 'pipe', 'molotov'],
+  uncommon: ['sawoff', 'revolver', 'sawoff', 'revolver', 'katana', 'grenade'],
+  rare: ['buzzsaw', 'buzzsaw', 'pipebomb', 'hammer'],
   legendary: ['rocket'],
 };
 const AUTO_FIRE = { nailgun: true, smg: true };
@@ -29,7 +30,7 @@ function stepCombat(R, s) {
 }
 function chooseSlot(R, s) {
   if (!s.ranged || s.ammo <= 0) return 0;
-  const reach = WEAPONS[s.melee || 'bat'].reach + 0.8;
+  const reach = WEAPONS[s.melee || 'bat'].reach + 0.2; // guns first; melee only when they're right on you
   for (const q of R.sk) {
     if (q === s || !q.alive) continue;
     const dx = q.x - s.x, dz = q.z - s.z, d = hyp(dx, dz);
@@ -120,6 +121,7 @@ function hitscan(R, s, w, Wp, ox, oy, oz, dx, dy, dz) {
   if (!best) { if (bd < Wp.range && !s.pred) vfx('spark', ox + dx * bd, oy + dy * bd, oz + dz * bd); return; }
   let dmg = Wp.dmg;
   if (Wp.far) dmg *= 1 - clamp((bd - Wp.near) / (Wp.far - Wp.near), 0, 1) * 0.85;
+  else dmg *= 1 - clamp((bd - 8) / 20, 0, 1) * (Wp.fall ?? 0.55); // full damage inside 10 m, tapering to 30 m
   damage(R, best, dmg, s, w, dx, dz, (Wp.knock || 1.2) / (Wp.pellets || 1));
 }
 
@@ -286,7 +288,7 @@ function spawnWave(R, wave) {
 }
 function announceWave(wave) { if (wave.t > 10) announce(wave.late ? 'POWER WEAPONS' : 'NEW DROPS'); }
 function dropPickup(R, w, x, y, z, ammo) {
-  if (!w || w === 'bat' || w === 'shove' || y < R.W.killY + 1) return;
+  if (!w || w === 'bat' || w === 'shove' || w === 'pistol' || y < R.W.killY + 1) return;
   const gy = groundAt(R.W, x, z, y + 1);
   R.picks.push({ id: R.nextId++, w, x, y: gy > -1e8 ? gy : y, z, t0: R.t + 0.3, ammo: ammo || 0, rarity: WEAPONS[w].rarity, dropped: true });
 }

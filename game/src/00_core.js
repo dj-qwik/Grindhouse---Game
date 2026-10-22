@@ -82,6 +82,7 @@ const SOUNDS = {
   shove: (d, v) => { noise(0.1, 0.35 * v, d, { type: 'lowpass', f0: 800 }); osc('sine', 140, 70, 0.12, 0.3 * v, d); },
   nail: (d, v) => { osc('square', 1400, 500, 0.04, 0.14 * v, d); noise(0.05, 0.22 * v, d, { f0: 3500, q: 2 }); },
   smg: (d, v) => { noise(0.05, 0.32 * v, d, { f0: 1800, q: 1 }); osc('square', 260, 120, 0.04, 0.12 * v, d); },
+  pistol: (d, v) => { noise(0.14, 0.45 * v, d, { type: 'lowpass', f0: 5000, f1: 700 }); osc('square', 220, 70, 0.08, 0.25 * v, d); },
   revolver: (d, v) => { noise(0.3, 0.6 * v, d, { type: 'lowpass', f0: 4000, f1: 400 }); osc('sine', 150, 50, 0.25, 0.5 * v, d); },
   shotgun: (d, v) => { const w = dirt(d, 0.5 * v); noise(0.4, 0.9, w, { type: 'lowpass', f0: 3000, f1: 200 }); osc('sine', 110, 40, 0.35, 0.6 * v, d); },
   rocket: (d, v) => { noise(0.6, 0.4 * v, d, { f0: 400, f1: 1500, q: 0.8 }); osc('sawtooth', 70, 140, 0.5, 0.12 * v, d); },

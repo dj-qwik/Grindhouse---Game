@@ -128,7 +128,7 @@ function startAttract() {
 // ───────────── bind a round to the view (practice, online, attract, replay)
 function bindRound(R, players, mode, me) {
   ROUND = R; GAME.players = players; GAME.mode = mode; GAME.me = me; GAME.spec = -1; GAME.myDeath = null; GAME.lastKill = null;
-  GAME.prev = new Map(); GAME.hist = []; GAME.shown = null; CAMR.pos = null; CAMR.orbit = Math.random() * 6;
+  GAME.prev = new Map(); GAME.hist = []; GAME.shown = null; CAMR.pos = null; CAMR.piv = null; CAMR.d = null; CAMR.spec = null; CAMR.orbit = Math.random() * 6;
   clearScene(); buildArena(R);
   for (const s of R.sk) GAME.prev.set(s.i, { x: s.x, y: s.y, z: s.z, yaw: s.yaw });
   if (me >= 0) { INPUT.yaw = R.sk[me].yaw; INPUT.pitch = -0.12; }
@@ -221,13 +221,18 @@ function cameraFrame(dt, view) {
   const v = view(tgt);
   if (GAME.spec >= 0) { // spectating: follow behind, or free orbit with the mouse
     if (GAME.specMode === 'orbit') updateCamera(R, dt, v, { yaw: INPUT.yaw, pitch: INPUT.pitch, dist: 7 });
-    else { CAMR.yaw += angWrap(tgt.yaw - CAMR.yaw) * Math.min(1, dt * 2.5); updateCamera(R, dt, v, { yaw: CAMR.yaw, pitch: -0.28 }); }
+    else { // calm chase: follow where they're travelling (not which way the board is spinning), slowly, from higher up
+      const sp = Math.hypot(tgt.vx, tgt.vz);
+      if (CAMR.spec == null || CAMR.specT !== tgt.i) { CAMR.spec = sp > 1 ? Math.atan2(tgt.vx, tgt.vz) : tgt.yaw; CAMR.specT = tgt.i; }
+      if (sp > 3 && tgt.mode !== MODE.AIR && tgt.mode !== MODE.DOWN) { const dy = angWrap(Math.atan2(tgt.vx, tgt.vz) - CAMR.spec); CAMR.spec += Math.max(-0.9 * dt, Math.min(0.9 * dt, dy * Math.min(1, dt * 0.8))); }
+      updateCamera(R, dt, v, { yaw: CAMR.spec, pitch: -0.34, dist: 6 });
+    }
     return;
   }
   const dead = !tgt.alive, md = GAME.myDeath;
   if (dead && md) { // victim's beat: a short push-in on your own wreck, then spectate
     const t = (performance.now() - md.at) / 1000;
-    updateCamera(R, dt, v, { yaw: INPUT.yaw + t * 0.6, pitch: -0.45, dist: 3 + t * 1.5 });
+    updateCamera(R, dt, v, { yaw: INPUT.yaw + Math.min(t, 2) * 0.12, pitch: -0.45, dist: 3 + Math.min(t, 2) * 1.2 });
     return;
   }
   updateCamera(R, dt, v, { yaw: INPUT.yaw, pitch: INPUT.pitch });

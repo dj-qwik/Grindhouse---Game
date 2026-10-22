@@ -86,7 +86,7 @@ function addHair(head, L, ol) {
 }
 
 // ── weapons (one builder for hand, pickup pedestal and HUD previews)
-const WEAPON_COLOR = { bat: '#C9965A', pipe: '#9AA4A8', katana: '#E8EEF0', cleaver: '#D5DDE0', whip: '#8E9AA0', baton: '#22292B', hammer: '#B85435', nailgun: '#FF9B36', sawoff: '#6E4630', smg: '#B4E64A', revolver: '#7D8B91', rocket: '#FF5C69', buzzsaw: '#36DCE8', grenade: '#5E8F2E', pipebomb: '#9AA4A8', molotov: '#B4E64A' };
+const WEAPON_COLOR = { bat: '#C9965A', pipe: '#9AA4A8', katana: '#E8EEF0', cleaver: '#D5DDE0', whip: '#8E9AA0', baton: '#22292B', hammer: '#B85435', nailgun: '#FF9B36', sawoff: '#6E4630', smg: '#B4E64A', revolver: '#7D8B91', pistol: '#5E6A70', rocket: '#FF5C69', buzzsaw: '#36DCE8', grenade: '#5E8F2E', pipebomb: '#9AA4A8', molotov: '#B4E64A' };
 function weaponMesh(id, scale = 1) {
   const T = THREE, g = new T.Group(), c = toon(WEAPON_COLOR[id] || '#ccc'), dark = toon('#22292B'), ol = (m) => withOutline(m, 0.015);
   const box = (w, h, d, m, x = 0, y = 0, z = 0) => { const o = ol(new T.Mesh(new T.BoxGeometry(w, h, d), m)); o.position.set(x, y, z); g.add(o); return o; };
@@ -103,6 +103,7 @@ function weaponMesh(id, scale = 1) {
     case 'nailgun': box(0.08, 0.14, 0.28, c, 0, 0.05, 0.1); box(0.05, 0.05, 0.2, dark, 0, 0.08, 0.3); box(0.04, 0.12, 0.04, dark, 0, -0.05, 0.02); break;
     case 'sawoff': cyl(0.025, 0.025, 0.42, dark, -0.025, 0.04, 0.3); cyl(0.025, 0.025, 0.42, dark, 0.025, 0.04, 0.3); box(0.06, 0.1, 0.26, c, 0, 0, -0.02); break;
     case 'smg': box(0.07, 0.12, 0.34, c, 0, 0.04, 0.14); box(0.05, 0.2, 0.06, toon('#FF5C69'), 0, -0.08, 0.1); cyl(0.02, 0.02, 0.18, dark, 0, 0.06, 0.38); box(0.12, 0.05, 0.08, toon('#36DCE8'), 0, 0.12, 0.12); break;
+    case 'pistol': cyl(0.02, 0.02, 0.2, c, 0, 0.05, 0.16); box(0.05, 0.07, 0.16, c, 0, 0.05, 0.06); box(0.04, 0.12, 0.05, dark, 0, -0.04, 0); break;
     case 'revolver': cyl(0.018, 0.018, 0.26, c, 0, 0.05, 0.22); cyl(0.045, 0.045, 0.07, c, 0, 0.04, 0.08); box(0.04, 0.12, 0.05, toon('#6E4630'), 0, -0.04, 0); break;
     case 'rocket': cyl(0.08, 0.08, 0.9, c, 0, 0.08, 0.15); box(0.24, 0.02, 0.36, toon('#22292B'), 0, 0.16, -0.1); cyl(0.09, 0.06, 0.12, dark, 0, 0.08, 0.62); break;
     case 'buzzsaw': box(0.12, 0.14, 0.4, c, 0, 0.05, 0.12); { const d = ol(new T.Mesh(new T.CylinderGeometry(0.16, 0.16, 0.02, 14), toon('#E8EEF0'))); d.position.set(0, 0.16, 0.18); g.add(d); g.userData.saw = d; } break;
@@ -116,7 +117,7 @@ function weaponMesh(id, scale = 1) {
 }
 
 // ── pose a rig from a skater's simulation state (+ prediction) once per frame
-const AIM_IDS = { nailgun: 1, sawoff: 1, smg: 1, revolver: 1, rocket: 1, buzzsaw: 1 };
+const AIM_IDS = { pistol: 1, nailgun: 1, sawoff: 1, smg: 1, revolver: 1, rocket: 1, buzzsaw: 1 };
 function poseRig(r, s, dt, view) {
   const T = THREE, P = r.parts, root = r.root;
   root.position.set(view.x, view.y, view.z);

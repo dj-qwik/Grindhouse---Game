@@ -23,7 +23,7 @@ function makeSkater(i, look, name) {
     wallNx: 0, wallNz: 0, wallT: 0, wallCd: 0,
     trick: null, trickT: 0, trickSpin: 0, pend: 0, combo: [], hist: [], adren: 0, manual: 0, lastBank: null, bankT: -9,
     downT: 0, immune: 0, stagger: 0, slipT: 0, deuce: null, flinch: 0, boostT: 0, bailT: -9,
-    melee: 'bat', ranged: null, ammo: 0, thr: 'shove', slot: 0, atk: null, fireCd: 0, altT: 0, adrenBoost: false,
+    melee: 'bat', ranged: 'pistol', ammo: WEAPONS.pistol.ammo, thr: 'shove', slot: 0, atk: null, fireCd: 0, altT: 0, adrenBoost: false,
     kills: 0, dmg: 0, deathT: -1, deathTick: -1, killer: -1, killWeapon: null, lastBy: -1, lastByT: -1e9, lastByW: null, place: 0,
     btn: 0, press: 0, prevBtn: 0, mx: 0, my: 0, hx, hy, hz, impactCd: 0, burn: 0, burnBy: -1, zoneT: 0,
     pred: false, // prediction copies never trigger effects

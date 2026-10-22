@@ -4,7 +4,7 @@
 // Skill (0.55–0.82) sets aim error, reaction time and how often they trick. Cash matches never contain bots.
 function botInput(R, s) {
   if (R.free) return freeRideBot(R, s);
-  const B = s.bot || (s.bot = { tgt: -1, think: 0, stuck: 0, unstuck: 0, wander: RNG() * TAU, pick: -1, aimErr: 0, hold: 0, jump: 0, trickDir: 0, fireT: 0, los: false, lastSwing: 0, retreat: 0, side: 1, cruise: null });
+  const B = s.bot || (s.bot = { tgt: -1, think: 0, stuck: 0, unstuck: 0, wander: RNG() * TAU, pick: -1, aimErr: 0, hold: 0, jump: 0, trickDir: 0, fireT: 0, los: false, lastSwing: 0, retreat: 0, side: 1, cruise: null, brawl: RNG() < 0.5 });
   const t = R.t, Z = zoneAt(R.arena, t + 4); // plan for where the zone is going
   let btn = 0, mx = 0, my = 0;
   B.think -= DT;
@@ -18,6 +18,8 @@ function botInput(R, s) {
     }
     B.tgt = best;
     B.aimErr = (RNG() - 0.5) * ((1 - s.skill) * 0.5 + 0.06);
+    // a skater carving at speed is hard to hit from a moving board, even for good shots
+    if (best >= 0) { const q = R.sk[best]; B.aimErr += (RNG() - 0.5) * Math.min(0.36, hyp(q.vx, q.vz) * 0.022 + hyp(s.vx, s.vz) * 0.012 + (s.mode === MODE.AIR ? 0.08 : 0)); }
     // scavenge when under-armed and a pickup is nearer than the fight
     B.pick = -1;
     const tq = best >= 0 ? R.sk[best] : null, td = tq ? hyp(tq.x - s.x, tq.z - s.z) : 99;
@@ -40,7 +42,7 @@ function botInput(R, s) {
   let td = 99;
   if (tq) td = hyp(tq.x - s.x, tq.z - s.z);
   // match phases (bible §3): scramble for gear first, fights spread out, everyone converges late
-  const engageR = t < 12 ? 0 : t < 28 ? 7 : t < 40 ? 16 : 99;
+  const engageR = t < 15 ? 0 : t < 32 ? 6 : t < 44 ? 13 : 99;
   if (B.retreat > 0) B.retreat -= DT;
   if (outside) { gx = Z.x; gz = Z.z; }
   else if (pick && chaseOk(pick.x, pick.z)) { gx = pick.x; gz = pick.z; }
@@ -53,7 +55,7 @@ function botInput(R, s) {
     gx = B.cruise[0]; gz = B.cruise[1];
   }
   else if (tq && chaseOk(tq.x, tq.z)) {
-    if (s.ranged && B.los && td < WEAPONS[s.ranged].range * 0.6) { // hold a firing distance, circle a little
+    if (s.ranged && s.ammo > 0 && B.los && td < WEAPONS[s.ranged].range * 0.6 && !(B.brawl && td < 9)) { // hold a firing distance (brawlers close in), circle a little
       const ang = yawOf(s.x - tq.x, s.z - tq.z) + 0.5, keep = s.ranged === 'sawoff' ? 5 : 10;
       gx = tq.x + Math.sin(ang) * keep; gz = tq.z + Math.cos(ang) * keep;
     } else { gx = tq.x + tq.vx * 0.3; gz = tq.z + tq.vz * 0.3; }
@@ -103,10 +105,10 @@ function botInput(R, s) {
   // ── fight
   // early on bots scramble for gear and only fight back; from 12 s they pick fights inside their engage radius
   const provoked = tq && s.lastBy === tq.i && t - s.lastByT < 2.5;
-  const hostile = tq && (provoked || (t >= 12 && td <= engageR + 3) || (t >= 40));
+  const hostile = tq && (provoked || (t >= 15 && td <= engageR + 3) || (t >= 44));
   if (tq && t > WARMUP && hostile) {
     const dy = Math.abs(tq.y - s.y), facing = Math.abs(angDiff(yawOf(tq.x - s.x, tq.z - s.z), aimYaw)) < 0.5;
-    const wantRanged = s.ranged && B.los && td > 2.6 && td < WEAPONS[s.ranged].range * 0.8;
+    const wantRanged = s.ranged && s.ammo > 0 && B.los && td > (B.brawl ? 4.5 : 2.4) && td < Math.min(WEAPONS[s.ranged].range * 0.8, s.ranged === 'revolver' ? 26 : 18);
     if (s.adren >= 100 && td < 3.8 && dy < 2 && !(s.prevBtn & BTN.trick)) btn |= BTN.trick;
     else if (s.slot === 1 && s.ranged && wantRanged && facing) {
       B.fireT -= DT;

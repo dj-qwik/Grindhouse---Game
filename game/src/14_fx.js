@@ -58,7 +58,7 @@ function tracer(ax, ay, az, bx, by, bz, col) {
   const a = tr.l.geometry.attributes.position.array; a[0] = ax; a[1] = ay; a[2] = az; a[3] = bx; a[4] = by; a[5] = bz; tr.l.geometry.attributes.position.needsUpdate = true;
   tr.l.material.color.set(col); tr.t = 0; tr.l.visible = true;
 }
-const TRACER_COL = { nailgun: 0xd8e2e6, smg: 0xb4e64a, revolver: 0xfff1b0, sawoff: 0xffb36b };
+const TRACER_COL = { pistol: 0xfff1b0, nailgun: 0xd8e2e6, smg: 0xb4e64a, revolver: 0xfff1b0, sawoff: 0xffb36b };
 
 // ── what the simulation calls
 const FEED = [];

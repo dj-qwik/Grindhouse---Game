@@ -82,18 +82,21 @@ function updateCamera(R, dt, tv, opts = {}) {
   const cp = Math.cos(pitch), fx = Math.sin(yaw) * cp, fy = Math.sin(pitch), fz = Math.cos(yaw) * cp;
   const rx = -Math.cos(yaw), rz = Math.sin(yaw), sh = aiming ? 0.6 : 0.25;
   const pivot = new T.Vector3(tgt.x + rx * sh, tgt.y + (aiming ? 0.1 : 0), tgt.z + rz * sh);
-  // occlusion: pull the camera in front of whatever is between it and the skater
+  // Smooth the point we orbit (follows the skater) and the boom length, but apply the look angles exactly:
+  // the camera swings around the pivot on a rigid arm, so turning never lags behind and then snaps.
+  const k = 1 - Math.exp(-dt * (opts.snap ? 60 : 18 + sp * 0.8));
+  if (!CAMR.piv || CAMR.piv.distanceTo(pivot) > 6) CAMR.piv = pivot.clone(); else CAMR.piv.lerp(pivot, k);
+  const P = CAMR.piv;
+  // occlusion: pull the camera in front of whatever is between it and the skater (in at once, back out gently)
   let d = dist;
-  if (R && R.W) { const hit = SIM0.raycast(R.W, pivot.x, pivot.y, pivot.z, -fx, -fy, -fz, dist); d = Math.max(0.9, Math.min(dist, hit - 0.25)); }
-  const want = new T.Vector3(pivot.x - fx * d, pivot.y - fy * d, pivot.z - fz * d);
+  if (R && R.W) { const hit = SIM0.raycast(R.W, P.x, P.y, P.z, -fx, -fy, -fz, dist); d = Math.max(0.9, Math.min(dist, hit - 0.25)); }
+  CAMR.d = CAMR.d == null || d < CAMR.d ? d : CAMR.d + (d - CAMR.d) * Math.min(1, dt * 4);
+  const want = new T.Vector3(P.x - fx * CAMR.d, P.y - fy * CAMR.d, P.z - fz * CAMR.d);
   if (R && R.W) { const gy = SIM0.groundAt(R.W, want.x, want.z, want.y + 0.5); if (gy > -1e8 && want.y < gy + 0.35) want.y = gy + 0.35; }
-  const k = 1 - Math.exp(-dt * (opts.snap ? 60 : 16 + sp * 0.8));
-  CAMR.pos.lerp(want, k);
-  // never let the lag put a wall between us
-  if (R && R.W && CAMR.pos.distanceTo(want) > 0.6) CAMR.pos.copy(want);
+  CAMR.pos.copy(want);
   cam.position.copy(CAMR.pos);
   const sk = PFX.shake * 0.25; cam.position.x += R3(sk); cam.position.y += R3(sk); cam.position.z += R3(sk);
-  cam.lookAt(pivot.x + fx * 10, pivot.y + fy * 10, pivot.z + fz * 10);
+  cam.lookAt(P.x + fx * 10, P.y + fy * 10, P.z + fz * 10);
   cam.fov = CAMR.fov; cam.updateProjectionMatrix();
   // sun follows the action so shadows stay crisp near the camera
   const sd = GFX.sunDir || new T.Vector3(0.5, 0.8, 0.3);
