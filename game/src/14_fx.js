@@ -125,7 +125,7 @@ function onKill(v, by, w, kind) {
   if (kind === 'blade') decal(q.x + Math.random() - 0.5, q.z + Math.random() - 0.5, 1.4, 0xb00c22);
   if (kind === 'rail' || kind === 'hazard') for (let k = 0; k < 16; k++) fxSpark(q.x, q.y + 1, q.z);
   playSfx('splat', q.x, q.y + 1, q.z, 1);
-  const kname = by >= 0 ? R.sk[by].name : null, wname = w === 'fell' ? 'the drop' : WEAPONS[w] ? WEAPONS[w].name : w === 'signature' ? 'Signature Slam' : HAZ_NAMES[w] || 'the arena';
+  const kname = by >= 0 ? R.sk[by].name : null, wname = w === 'fell' ? 'the drop' : WEAPONS[w] ? WEAPONS[w].name : w === 'signature' ? 'Super Slam' : HAZ_NAMES[w] || 'the arena';
   pushFeed(by >= 0 ? `<b>${esc(nameOf(by))}</b> <span class="w">${esc(wname)}</span> <b>${esc(nameOf(v))}</b>` : `<b>${esc(nameOf(v))}</b> <span class="w">${esc(wname)}</span>`, by === me || v === me);
   if (by === me && v !== me) { playSfx('kill', null, null, null, 1); pip(v, kind); rumble(0.8, 200); }
   if (v === me) GAME.myDeath = { by, w: wname, kind, at: performance.now(), slowmo: 1.2 };

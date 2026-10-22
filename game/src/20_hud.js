@@ -20,7 +20,7 @@ function updateHud(R, dt) {
   if (HUD.cache.ad !== a) {
     HUD.cache.ad = a; $('#hAdr').style.transform = `scaleX(${a / 100})`;
     const bar = $('#hAdrBar'); bar.classList.toggle('half', a >= 50 && a < 100); bar.classList.toggle('full', a >= 100);
-    setText('hAdrT', a >= 100 ? `SLAM READY · ${keyLabel(KEYMAP.trick)}` : a >= 50 ? 'ADRENALINE · NEXT HIT BOOSTED' : 'ADRENALINE');
+    setText('hAdrT', a >= 100 ? `SUPER SLAM READY · ${keyLabel(KEYMAP.trick)}` : a >= 50 ? 'ADRENALINE · NEXT HIT BOOSTED' : 'ADRENALINE');
   }
   // weapons: melee · gun (+ammo) · throwable. Attack picks the right one for you.
   const sl = [
