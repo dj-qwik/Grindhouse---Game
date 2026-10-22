@@ -196,11 +196,11 @@ test('happy path: open → deposits → ready-check lock → co-signed result �
   // Worker idles while the match is being played
   assert.deepEqual(await worker.tick(matchId), { kind: 'idle', reason: 'match in progress' })
 
-  // Match director publishes evidence: round winners a, b, c (all different) → final among them, c wins
+  // Match director publishes evidence: one round (Grindhouse: last skater standing), c wins
   const roster = sortAddresses(players)
   const [a, b, c, d] = roster
-  const winners = [a, b, c, c]
-  void d
+  const winners = [c]
+  void a; void b; void d
   evidenceStore.set(matchId, evidenceFor(matchId, roster, winners, opened.configHash))
 
   const champBefore = await pub.getBalance({ address: c })
@@ -269,19 +269,19 @@ test('co-signers refuse invalid evidence; worker will not submit', async () => {
   await pub.waitForTransactionReceipt({ hash: l.hash })
   const [x, y] = sortAddresses(ps)
 
-  // Match "continued" after x reached 2 wins
-  const bad = evidenceFor(opened.matchId, [x, y], [x, x, y], opened.configHash)
+  // A ledger with more than the one round a Grindhouse match has
+  const bad = evidenceFor(opened.matchId, [x, y], [x, y], opened.configHash)
   await assert.rejects(cosign(readClient, cosignerAccts[0], { evidence: bad }), CosignRefusal)
 
   // Seed reveal doesn't match commitment
-  const good = evidenceFor(opened.matchId, [x, y], [y, x, y], opened.configHash)
+  const good = evidenceFor(opened.matchId, [x, y], [y], opened.configHash)
   const forged = { ...good, rounds: good.rounds.map((r, i) => (i === 0 ? { ...r, seedReveal: keccak256('0x01') } : r)) }
   await assert.rejects(cosign(readClient, cosignerAccts[0], { evidence: forged }), /seed reveal/)
 
   // Wrong roster
   const outsider = player(19).address
   await assert.rejects(
-    cosign(readClient, cosignerAccts[0], { evidence: evidenceFor(opened.matchId, [x, outsider], [x, x], opened.configHash) }),
+    cosign(readClient, cosignerAccts[0], { evidence: evidenceFor(opened.matchId, [x, outsider], [x], opened.configHash) }),
     /roster/,
   )
 
@@ -409,7 +409,7 @@ test('co-signers over HTTP: auth enforced, signatures accepted on-chain', async 
     assert.ok(l.locked)
     await pub.waitForTransactionReceipt({ hash: l.hash })
     const [x, y] = sortAddresses(ps)
-    const ev = evidenceFor(opened.matchId, [x, y], [x, y, y], opened.configHash)
+    const ev = evidenceFor(opened.matchId, [x, y], [y], opened.configHash)
 
     const transports = ports.map((p) => httpCosigner(`http://127.0.0.1:${p}`, token))
     const worker = new SettlementWorker(opClient, ledger, { get: async () => ev }, transports)

@@ -25,6 +25,8 @@ jobs:
           cd /tmp/wallet-debug && git init -q && git checkout -q -b ci-wallet-debug && git add -A
           git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "wallet debug build ${GITHUB_SHA}"
           git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-wallet-debug
+      - name: shared rules + settlement suites (single-round ledgers, co-signer refusals, refunds) on anvil
+        run: npm test
       - name: determinism + network tests
         run: npm test -w @grindhouse/game
       - name: real-money end to end on a local chain (deploy, deposit, match, replay-verified co-sign, payout)

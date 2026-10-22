@@ -174,7 +174,7 @@ const CASH = (() => {
           ${o.sent ? `<p style="color:var(--mint);margin:0">${esc(o.sent)}${txl(o.tx)}</p>` : ''}
         </div>
       </div>
-      <div class="row" style="gap:8px"><button class="btn ghost small" id="walletBack">Back</button><button class="btn ghost small" id="cashExport">Export key</button><button class="btn ghost small" id="cashLogout">Sign out</button></div>
+      <div class="row" style="gap:8px"><button class="btn ghost small" id="walletBack">Back</button>${C.cfg && C.cfg.explorer ? `<a class="btn ghost small" href="${C.cfg.explorer}/address/${esc(C.w.address)}" target="_blank" rel="noopener">Transaction history ↗</a>` : ''}<button class="btn ghost small" id="cashExport">Export key</button><button class="btn ghost small" id="cashLogout">Sign out</button></div>
       <ul class="fine"><li>This wallet is yours. Grindhouse never holds its keys and can't move your ETH; only you can, from here.</li><li>Stakes go from this wallet into the escrow contract, and winnings come back to it.</li></ul>
     </div>`;
   }

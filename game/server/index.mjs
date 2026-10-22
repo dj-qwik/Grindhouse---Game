@@ -33,7 +33,7 @@ function serveStatic(req, res) {
   if (p.endsWith('/')) p += 'index.html'
   let file = path.join(WEB_DIR, p)
   if (!file.startsWith(WEB_DIR)) { res.writeHead(403); return res.end() }
-  if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(WEB_DIR, 'index.html') // SPA fallback
+  if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) { if (path.extname(p)) { res.writeHead(404); return res.end('not found') } file = path.join(WEB_DIR, 'index.html') } // SPA fallback for routes, real 404 for assets
   if (!fs.existsSync(file)) { res.writeHead(404); return res.end('client not built') }
   const ext = path.extname(file)
   const gz = /\bgzip\b/.test(req.headers['accept-encoding'] || '') && /\.(html|js|css|json|svg)$/.test(ext)

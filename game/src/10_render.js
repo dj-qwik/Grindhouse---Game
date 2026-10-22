@@ -180,36 +180,62 @@ function buildArena(R) {
   apron.geometry.attributes.uv.array.forEach((v, k, a) => { a[k] = v * 120; });
   apron.rotation.x = -Math.PI / 2; apron.position.y = W.floor ? -0.05 : look.water ? W.killY + 2.5 : W.killY - 14; apron.receiveShadow = true; root.add(apron); GFX.apron = apron;
   addSkyline(root, W, look);
+  // Which prims/rails ever change? Dry-run the arena's hazard timeline on a scratch copy (same build + variant)
+  // so everything static can be merged into a few draw calls; moving/collapsing pieces stay separate.
+  const dyn = dynamicParts(R);
   // primitives
+  const groups = new Map(); // material → { pos: [], uv: [], edges: [] }
   W.prims.forEach((p, k) => {
+    const mat = matFor(p, look, k);
+    if (!dyn.prims.has(k)) {
+      const g = prismGeo(p), m4 = new T.Matrix4().compose(new T.Vector3(p.cx, 0, p.cz), new T.Quaternion().setFromAxisAngle(new T.Vector3(0, 1, 0), p.yaw), new T.Vector3(1, 1, 1));
+      g.applyMatrix4(m4);
+      let G = groups.get(mat); if (!G) { G = { pos: [], uv: [], edges: [] }; groups.set(mat, G); }
+      G.pos.push(...g.attributes.position.array); G.uv.push(...g.attributes.uv.array);
+      const eg = new T.EdgesGeometry(g, 28); G.edges.push(...eg.attributes.position.array); eg.dispose(); g.dispose();
+      return;
+    }
     const g = prismGeo(p);
-    const m = new T.Mesh(g, matFor(p, look, k)); m.castShadow = true; m.receiveShadow = true;
+    const m = new T.Mesh(g, mat); m.castShadow = true; m.receiveShadow = true;
     m.position.set(p.cx, 0, p.cz); m.rotation.y = p.yaw;
     const edges = new T.LineSegments(new T.EdgesGeometry(g, 28), new T.LineBasicMaterial({ color: INK, transparent: true, opacity: 0.8 }));
     m.add(edges);
     root.add(m);
     GFX.built.prims.push({ p, m, edges, top: p.top, y0: p.y0, w: p.w, d: p.d, h0: p.h0, h1: p.h1, gone: false, warnMat: null, baseMat: m.material });
   });
-  // rails
-  for (const r of W.rails) {
-    const grp = new T.Group(), rad = r.kind === 'coping' ? 0.06 : r.kind === 'ledge' ? 0.035 : 0.05;
-    const mat = toon(r.kind === 'ledge' ? '#8C969A' : '#C9D3D6');
+  const edgeMat = new T.LineBasicMaterial({ color: INK, transparent: true, opacity: 0.8 }), allEdges = [];
+  for (const [mat, G] of groups) {
+    const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(G.pos, 3)); g.setAttribute('uv', new T.Float32BufferAttribute(G.uv, 2)); g.computeVertexNormals();
+    const m = new T.Mesh(g, mat); m.castShadow = true; m.receiveShadow = true; root.add(m);
+    allEdges.push(...G.edges);
+  }
+  if (allEdges.length) { const eg = new T.BufferGeometry(); eg.setAttribute('position', new T.Float32BufferAttribute(allEdges, 3)); root.add(new T.LineSegments(eg, edgeMat)); }
+  // rails: static ones merged into one mesh + one outline; live/collapsing ones stay separate
+  const railStatic = { pos: [], norm: [] };
+  const addCyl = (into, a, b, rad, seg) => {
+    const d = b.clone().sub(a), L = d.length(); if (L < 1e-4) return;
+    const g = new T.CylinderGeometry(rad, rad, L, seg, 1, true);
+    g.applyMatrix4(new T.Matrix4().compose(a.clone().add(b).multiplyScalar(0.5), new T.Quaternion().setFromUnitVectors(new T.Vector3(0, 1, 0), d.normalize()), new T.Vector3(1, 1, 1)));
+    const ng = g.toNonIndexed(); into.pos.push(...ng.attributes.position.array); into.norm.push(...ng.attributes.normal.array); g.dispose(); ng.dispose();
+  };
+  W.rails.forEach((r, ri) => {
+    const rad = r.kind === 'coping' ? 0.06 : r.kind === 'ledge' ? 0.035 : 0.05;
+    const into = dyn.rails.has(ri) ? { pos: [], norm: [] } : railStatic;
     for (const sg of r.seg) {
-      const a = new T.Vector3(...sg.a), b = new T.Vector3(...sg.b), mid = a.clone().add(b).multiplyScalar(0.5);
-      const c = new T.Mesh(new T.CylinderGeometry(rad, rad, sg.l, 8), mat); c.position.copy(mid);
-      c.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), b.clone().sub(a).normalize()); c.castShadow = true;
-      grp.add(withOutline(c, 0.018));
+      const a = new T.Vector3(...sg.a), b = new T.Vector3(...sg.b);
+      addCyl(into, a, b, rad, 8);
       if (r.kind === 'rail' || r.kind === 'handrail') { // posts
         const n = Math.max(1, Math.floor(sg.l / 2.5));
         for (let k = 0; k <= n; k++) {
           const p = a.clone().lerp(b, k / n), gy = SIM0.groundAt(W, p.x, p.z, p.y - 0.05);
           const h = p.y - (gy > -1e8 ? gy : p.y - 1); if (h <= 0.05) continue;
-          const post = new T.Mesh(new T.CylinderGeometry(0.04, 0.04, h, 6), mat); post.position.set(p.x, p.y - h / 2, p.z); grp.add(post);
+          addCyl(into, new T.Vector3(p.x, p.y - h, p.z), p, 0.04, 6);
         }
       }
     }
-    root.add(grp); GFX.built.rails.push({ r, grp, mat });
-  }
+    if (into !== railStatic) { const grp = railMesh(into); root.add(grp); GFX.built.rails.push({ r, grp, mat: grp.userData.mat }); }
+  });
+  if (railStatic.pos.length) root.add(railMesh(railStatic));
   addGraffiti(root, W);
   // zone wall
   const zw = new T.Mesh(new T.CylinderGeometry(1, 1, 60, 64, 1, true), new T.ShaderMaterial({
@@ -225,6 +251,34 @@ function buildArena(R) {
     const d = new T.Mesh(new T.PlaneGeometry(1, 1), new T.MeshBasicMaterial({ map: GFX.tex.blood, color: 0xd1102a, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }));
     d.rotation.x = -Math.PI / 2; d.visible = false; d.userData.shared = true; root.add(d); GFX.decals.push(d);
   }
+}
+function railMesh(d) {
+  const T = THREE, g = new T.BufferGeometry();
+  g.setAttribute('position', new T.Float32BufferAttribute(d.pos, 3)); g.setAttribute('normal', new T.Float32BufferAttribute(d.norm, 3));
+  const mat = toon('#C9D3D6'), m = new T.Mesh(g, mat); m.castShadow = true;
+  const o = new T.Mesh(g, outlineMat(0.018)); m.add(o);
+  const grp = new T.Group(); grp.add(m); grp.userData.mat = mat; return grp;
+}
+// dry-run an arena's update() over the whole match on a scratch copy to find the parts that ever change
+function dynamicParts(R) {
+  const A = R.def, W2 = A.build(R.W.variant || 0), prims = new Set(), rails = new Set();
+  const snapP = (p) => [p.cx, p.cz, p.top, p.y0, p.w, p.d, p.yaw, p.h0, p.h1, p.gone, p.warn || 0, p.vx, p.vz].join(),
+    snapR = (r) => [r.gone, r.live].join();
+  const p0 = W2.prims.map(snapP), r0 = W2.rails.map(snapR);
+  const fake = { W: W2, arena: W2, t: 0, tick: 0, sk: [], picks: [], proj: [], fires: [], dying: [], zoneNow: { x: 0, z: 0, r: 99 }, def: A, alive: 0 };
+  const keep = { ...FXHOOK }; for (const k of Object.keys(FXHOOK)) FXHOOK[k] = () => {}; // silent dry run
+  try {
+    if (A.init) A.init(fake);
+    for (let k = 1; k <= 3600; k += 6) {
+      fake.tick = k; fake.t = k / 60; fake.zoneNow = SIM0.zoneAt(W2, fake.t);
+      if (A.update) A.update(fake, 1 / 60); if (A.after) A.after(fake, 1 / 60);
+      W2.prims.forEach((p, i) => { if (!prims.has(i) && snapP(p) !== p0[i]) prims.add(i); });
+      W2.rails.forEach((r, i) => { if (!rails.has(i) && snapR(r) !== r0[i]) rails.add(i); });
+    }
+  } catch (e) { console.warn('dynamicParts', e); W2.prims.forEach((_, i) => prims.add(i)); W2.rails.forEach((_, i) => rails.add(i)); }
+  finally { Object.assign(FXHOOK, keep); }
+  if (W2.prims.length !== R.W.prims.length) { R.W.prims.forEach((_, i) => prims.add(i)); }
+  return { prims, rails };
 }
 function addFloorMarks(root, W, look) {
   // painted lines / court markings / drains for readability
@@ -286,7 +340,8 @@ function syncArena(R, t, dt) {
   }
   for (const e of B.rails) {
     e.grp.visible = !e.r.gone;
-    if (e.r.live) { const f = Math.random() < 0.5; e.grp.children.forEach((c) => { if (c.material) c.material = f ? (WARN_MAT.live || (WARN_MAT.live = toon('#36DCE8', { emissive: new THREE.Color('#1b8fb0') }))) : e.mat; }); if (Math.random() < 0.3 && e.r.seg.length) { const s = e.r.seg[Math.floor(Math.random() * e.r.seg.length)], u = Math.random(); fxSpark(s.a[0] + (s.b[0] - s.a[0]) * u, s.a[1] + (s.b[1] - s.a[1]) * u, s.a[2] + (s.b[2] - s.a[2]) * u, 0x7ff6ff); } }
+    if (e.r.live || e.wasLive) { const f = e.r.live && Math.random() < 0.5; e.wasLive = e.r.live; const m0 = e.grp.children[0]; if (m0) m0.material = f ? (WARN_MAT.live || (WARN_MAT.live = toon('#36DCE8', { emissive: new THREE.Color('#1b8fb0') }))) : e.mat; }
+    if (e.r.live) { if (Math.random() < 0.3 && e.r.seg.length) { const s = e.r.seg[Math.floor(Math.random() * e.r.seg.length)], u = Math.random(); fxSpark(s.a[0] + (s.b[0] - s.a[0]) * u, s.a[1] + (s.b[1] - s.a[1]) * u, s.a[2] + (s.b[2] - s.a[2]) * u, 0x7ff6ff); } }
   }
   syncHazards(R, B, dt);
   // zone

@@ -18,6 +18,7 @@ export const T = {
 const P31 = 2147483648, INPUT_LIMIT = P31 * 512, BTN_MASK = 511
 const EDGE_BITS = [4, 8, 16, 64, 128, 256] // jump, trick, attack, use, swap, throw: quick taps must register once
 const IDLE = 16 | (16 << 5) | (32 << 21)
+const SPECTATOR_DELAY_MS = 2000
 // Shuffled deck shared across matches: every arena comes up before any repeats.
 const DECK = []
 function drawArena(keys, avoid) {
@@ -150,20 +151,32 @@ export class Match {
     const frame = [row, this.rec.splice(0)]
     this.frames.push(frame); this.pending.push(frame); this.audit[0].inputs.push(row)
     if (R.tick % T.FRAME_EVERY === 0 || w) this.flush()
-    if (R.tick % T.HASH_EVERY === 0) this.broadcast({ t: 'h', k: R.tick, h: R.hash() })
+    if (R.tick % T.HASH_EVERY === 0) this.broadcastPlay({ t: 'h', k: R.tick, h: R.hash() })
     if (w) this.endRound(w)
   }
   flush() {
     if (!this.pending.length) return
-    this.broadcast({ t: 'tk', k: this.round.tick - this.pending.length + 1, f: this.pending })
+    this.broadcastPlay({ t: 'tk', k: this.round.tick - this.pending.length + 1, f: this.pending })
     this.pending = []
+  }
+  // Eliminated players keep watching, but 2 s behind (bible §20: spectators get delayed read-only state, so a dead
+  // player can't feed live positions to someone still alive).
+  broadcastPlay(msg) {
+    const s = JSON.stringify(msg)
+    for (const x of this.humans) {
+      if (!x.conn || !x.connected) continue
+      const sk = this.round && this.round.sk[x.i], conn = x.conn
+      if (sk && !sk.alive && this.mode === 'cash') x.delayed = true // once delayed, always delayed (keeps order)
+      if (x.delayed) setTimeout(() => conn.sendRaw(s), SPECTATOR_DELAY_MS)
+      else conn.sendRaw(s)
+    }
   }
   endRound(w) {
     this.flush()
     this.champion = w.i
     this.standings = this.round.standings()
     this.phase('result', T.RESULT_MS)
-    this.broadcast({ t: 'end', n: 1, k: this.round.tick, w: w.i, h: this.round.hash(), standings: this.standings, timeout: !!this.round.timeout })
+    this.broadcastPlay({ t: 'end', n: 1, k: this.round.tick, w: w.i, h: this.round.hash(), standings: this.standings, timeout: !!this.round.timeout })
     this.hook(this, 'champion', { winner: w.i, standings: this.standings })
   }
   close(reason) {

@@ -215,8 +215,8 @@ function portrait(look) {
   sc.add(new T.HemisphereLight(0xffffff, 0x887766, 2.2)); const dl = new T.DirectionalLight(0xffffff, 1.6); dl.position.set(2, 3, 2); sc.add(dl);
   const rig = makeSkaterRig(look); sc.add(rig.root);
   const fake = { alive: true, hp: 100, mode: 0, vx: 0, vz: 0, vy: 0, charge: -1, my: 0, manual: 0, adren: 0, slot: 0, melee: 'bat', ranged: null, ammo: 0, trick: null, atk: null, onPrim: null, nx: 0, ny: 1, nz: 0 };
-  poseRig(rig, fake, 0.016, { x: 0, y: 0, z: 0, yaw: -Math.PI / 2, aimYaw: -Math.PI / 2 + Math.PI / 2 + 0.4, aimPitch: 0 });
-  cam.position.set(1.6, 1.55, 0.2); cam.lookAt(0, 1.3, 0);
+  poseRig(rig, fake, 0.016, { x: 0, y: 0, z: 0, yaw: 0.35, aimYaw: Math.PI / 2 + 0.35, aimPitch: 0 });
+  cam.position.set(1.7, 1.5, 0.35); cam.lookAt(0, 1.22, 0);
   const rt = new T.WebGLRenderTarget(128, 128); GFX.r.setRenderTarget(rt); GFX.r.setClearColor(new T.Color(SKATERS[look].trim), 1); GFX.r.render(sc, cam); GFX.r.setRenderTarget(null);
   const px = new Uint8Array(128 * 128 * 4); GFX.r.readRenderTargetPixels(rt, 0, 0, 128, 128, px);
   const cv = document.createElement('canvas'); cv.width = cv.height = 128; const g = cv.getContext('2d'), id = g.createImageData(128, 128);

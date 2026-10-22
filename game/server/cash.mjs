@@ -274,6 +274,7 @@ export async function createCash({ createMatch, onLobbyChange }) {
 
   // ── settlement loop: index events, drive every locked/aborted match to payout/refund
   C.settleStatus = new Map() // matchId → last step text
+  C.settleTx = new Map() // matchId → last settlement transaction hash (results screen explorer link)
   let loopTimer = null, looping = false, again = false
   function kick() { if (looping) { again = true; return } clearTimeout(loopTimer); settleLoop() }
   async function settleLoop() {
@@ -286,7 +287,7 @@ export async function createCash({ createMatch, onLobbyChange }) {
         // a match that doesn't exist on this escrow (e.g. it lives on the legacy one): not ours to track
         if (step.kind === 'idle' && /^status 0:/.test(step.reason || '')) { active.delete(id); continue }
         C.settleStatus.set(id, step)
-        if (step.kind === 'sent') log(id.slice(0, 10), step.action, step.hash)
+        if (step.kind === 'sent') { log(id.slice(0, 10), step.action, step.hash); C.settleTx.set(id, step.hash) }
         if (step.kind === 'done') { log(id.slice(0, 10), step.status); active.delete(id); await store.set('active-matches', [...active]) }
       }
       await refreshBalance()
@@ -298,7 +299,7 @@ export async function createCash({ createMatch, onLobbyChange }) {
     let m = await escrow.getMatch(matchId)
     if (!m.status && C.legacyEscrow) m = await C.legacyEscrow.getMatch(matchId) // older match
     const step = C.settleStatus.get(matchId)
-    return { status: Object.keys(MatchStatus).find((k) => MatchStatus[k] === m.status) || String(m.status), winner: m.winner, resultSubmittedAt: String(m.resultSubmittedAt), disputeWindow: m.disputeWindow, step: step ? (step.reason || step.action || step.status || step.kind) : null }
+    return { status: Object.keys(MatchStatus).find((k) => MatchStatus[k] === m.status) || String(m.status), winner: m.winner, txHash: C.settleTx.get(matchId) || null, resultSubmittedAt: String(m.resultSubmittedAt), disputeWindow: m.disputeWindow, step: step ? (step.reason || step.action || step.status || step.kind) : null }
   }
   return C
 }

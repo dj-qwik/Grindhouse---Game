@@ -76,7 +76,7 @@ function sampleInput(dt) {
   const has = (a) => act(a) || (a === 'brake' && keyDown(ALT_KEYS.brake));
   for (const a of ['boost', 'brake', 'jump', 'trick', 'attack', 'use', 'swap', 'throw']) if (has(a)) btn |= BTN[a];
   if (SETTINGS.altToggle ? INPUT.altLatched : act('alt')) btn |= BTN.alt;
-  const pad = readPad();
+  const pad = readPad(); INPUT.padHeld = 0;
   if (pad) {
     const ax = pad.axes, b = (i) => pad.buttons[i] && (pad.buttons[i].pressed || pad.buttons[i].value > 0.4);
     const lx = dz(ax[0] || 0), ly = dz(ax[1] || 0), rx = dz(ax[2] || 0), ry = dz(ax[3] || 0);
@@ -93,7 +93,7 @@ function sampleInput(dt) {
       INPUT.yaw -= rx * s * 1.25; INPUT.pitch = clampPitch(INPUT.pitch - ry * s * 0.8 * (SETTINGS.invertY ? -1 : 1));
       const newly = pb & ~padPrev; INPUT.pressQueue |= newly; btn |= pb;
     }
-    padPrev = pb;
+    padPrev = pb; INPUT.padHeld = pb;
   }
   const m = Math.hypot(mx, my); if (m > 1) { mx /= m; my /= m; }
   btn |= INPUT.pressQueue; INPUT.pressQueue = 0;

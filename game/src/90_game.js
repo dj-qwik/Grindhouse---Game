@@ -249,12 +249,14 @@ function practiceFrame(dt, inp) {
     // slow-motion beat when you go down (visual only, practice); the match clock never pauses for others online
     const slow = GAME.myDeath && performance.now() - GAME.myDeath.at < 700 ? 0.3 : 1;
     GAME.acc += dt * slow;
+    GAME.pend = (GAME.pend || 0) | inp.btn; // presses wait for the next tick (high refresh rates draw several frames per tick)
     let n = 0;
     while (GAME.acc >= DT && n++ < 6) {
       GAME.acc -= DT;
       snapPrev();
       const aim = me.alive ? aimFrom(R, me) : { yaw: INPUT.yaw, pitch: INPUT.pitch };
-      const p = SIM0.packInput({ mx: inp.mx, my: inp.my, yaw: aim.yaw, pitch: aim.pitch, btn: n === 1 ? inp.btn : inp.btn & ~(BTN.jump | BTN.trick | BTN.attack | BTN.use | BTN.swap | BTN.throw) | (inp.btn & heldMask()), lag: 0 });
+      const btn = GAME.pend | heldMask() | (INPUT.padHeld || 0); GAME.pend = 0;
+      const p = SIM0.packInput({ mx: inp.mx, my: inp.my, yaw: aim.yaw, pitch: aim.pitch, btn, lag: 0 });
       const inputs = { [GAME.me]: p };
       GAME.inputs.push(p);
       R.step(inputs);
