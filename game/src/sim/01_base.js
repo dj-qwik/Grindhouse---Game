@@ -76,7 +76,8 @@ const TRICKS = {
   laser: { name: 'Laser Flip', dur: 0.85, pts: 26 },        // ↗
   hardflip: { name: 'Hardflip', dur: 0.72, pts: 20 },       // ↙
   mctwist: { name: '540 McTwist', dur: 1.05, pts: 36 },     // ↘
-  handplant: { name: 'Handplant', dur: 0.9, pts: 26 },      // trick, no direction, at the top of a quarter pipe
+  handplant: { name: 'Handplant', dur: 0.9, pts: 26 },      // …or on any edge you're level with
+  wallkick: { name: 'Wall Kick', dur: 0, pts: 14 },         // trick button riding/flying into a wall
 };
 const REPEAT_DECAY = [1, 0.75, 0.5, 0.35];
 const COMBO_STEP = 0.2, COMBO_MAX = 2; // ×1.2 for 2 moves in a combo, ×1.4 for 3 … up to ×2

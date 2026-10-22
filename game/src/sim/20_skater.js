@@ -54,6 +54,9 @@ function stepSkater(s, W, t) {
   const ctl = s.stagger > 0 ? 0.35 : s.flinch > 0 ? 0.7 : 1;
   const mag = s.slipT > 0 ? 0 : hyp(s.mx, s.my); // slipping in someone's mess: no steering, no push
   const [dX, dZ] = stickWorld(s, s.mx, s.my);
+  s.kickCd = (s.kickCd || 0) - dt; s.kickT = (s.kickT || 0) - dt;
+  if ((press & BTN.trick) && s.adren < 100 && s.mode === MODE.GROUND && s.my > 0.35 && Math.abs(s.mx) < 0.35 && grabEdge(s, W)) return;
+  if ((press & BTN.trick) && s.adren < 100 && !s.trick && !s.plant && s.kickCd <= 0 && (s.mode === MODE.GROUND || s.mode === MODE.AIR) && !nearEdge(s, W) && wallKick(s, W)) return;
   if (s.mode === MODE.GRIND) { stepGrind(s, W, dt); return; }
   if (s.mode === MODE.WALL) { stepWall(s, W, dt); return; }
   if (s.mode === MODE.GROUND) stepGround(s, W, dt, btn, mag, dX, dZ, ctl);
@@ -191,6 +194,8 @@ function stepAir(s, W, dt, btn, press, mag, dX, dZ, ctl) {
     const L = s.mx < -0.35, Rt = s.mx > 0.35, U = s.my > 0.35, D = s.my < -0.35;
     // handplant: no direction, near the top of vert air over a quarter pipe's coping
     if (!L && !Rt && !U && !D && (s.vertX || s.vertZ) && s.lipP && s.y > s.lipP.lipH - 0.3 && s.vy < 3.5 && hyp(s.x - s.lipX, s.z - s.lipZ) < 1.6) { startPlant(s); return; }
+    if (U && !L && !Rt && grabEdge(s, W)) return;          // ↑ + trick near an edge: grind it
+    if (D && !L && !Rt && s.vy < 3.5 && edgePlant(s, W)) return; // ↓ + trick near an edge: handplant on it
     s.trick = U && L ? 'treflip' : U && Rt ? 'laser' : D && L ? 'hardflip' : D && Rt ? 'mctwist'
       : L ? 'kickflip' : Rt ? 'heelflip' : D ? 'shuvit' : U ? 'tre' : 'kickflip';
     s.trickT = 0; sk_sfx(s, TRICKS[s.trick].dur > 0.75 ? 'whoosh' : 'flick', 0.6);
@@ -282,7 +287,7 @@ function findRail(s, W) {
   const vh = hyp(s.vx, s.vz);
   if (vh < MOVE.railMinSpeed) return null;
   for (const r of W.rails) {
-    if (r.gone || (r === s.lastRail && s.railCd > 0)) continue;
+    if (railOff(r) || (r === s.lastRail && s.railCd > 0)) continue;
     for (let k = 0; k < r.seg.length; k++) {
       const g = r.seg[k], a = g.a, b = g.b;
       const t = segT(s.x, s.y, s.z, a[0], a[1], a[2], b[0], b[1], b[2]);
@@ -302,7 +307,7 @@ function findRail(s, W) {
 }
 function stepGrind(s, W, dt) {
   const r = s.rail;
-  if (!r || r.gone) { s.rail = null; goAir(s); return; }
+  if (!r || railOff(r)) { s.rail = null; goAir(s); return; }
   let g = r.seg[s.railK];
   s.grindT += dt; s.pend += 5 * dt; // grind tick +5/s, banked on a clean landing
   if (s.grindT <= dt && !s.combo.includes('grind')) s.combo.push('grind');
@@ -385,10 +390,13 @@ function stepDeuce(s, W, dt) {
 // ── handplant: at the top of vert air over a quarter pipe, trick with no direction → one hand on the coping,
 // upside down for a beat, then drop back in facing down the ramp. Bankable (+26, decays on repeats).
 const PLANT_T = 0.9;
-function startPlant(s) {
-  const p = s.lipP; toLocal(p, s.x, s.z);
-  const [cx, cz] = offs(p.cx, p.cz, p.yaw, clamp(LX, -p.w / 2 + 0.3, p.w / 2 - 0.3), p.d / 2); // a hand on the coping
-  s.plant = { t: 0, x: cx, y: p.lipH, z: cz, nx: s.vertX, nz: s.vertZ };
+function startPlant(s, at) {
+  if (at) s.plant = { t: 0, ...at };
+  else {
+    const p = s.lipP; toLocal(p, s.x, s.z);
+    const [cx, cz] = offs(p.cx, p.cz, p.yaw, clamp(LX, -p.w / 2 + 0.3, p.w / 2 - 0.3), p.d / 2); // a hand on the coping
+    s.plant = { t: 0, x: cx, y: p.lipH, z: cz, nx: s.vertX, nz: s.vertZ };
+  }
   s.vx = 0; s.vy = 0; s.vz = 0; s.trick = null;
   sk_sfx(s, 'grind', 0.5);
 }
@@ -404,4 +412,69 @@ function stepPlant(s, dt) {
     s.vertX = P.nx; s.vertZ = P.nz; s.lipY = null; s.lipP = null;
     sk_sfx(s, 'catch', 0.7);
   }
+}
+
+// handplant on any edge/rail: in the air with no direction, near an edge you're level with or just above
+function edgePlant(s, W) {
+  let best = null, bd = 0.9;
+  for (const r of W.edges ? W.rails.concat(W.edges) : W.rails) {
+    if (railOff(r)) continue;
+    for (const g of r.seg) {
+      const t = segT(s.x, s.y, s.z, g.a[0], g.a[1], g.a[2], g.b[0], g.b[1], g.b[2]);
+      const cx = g.a[0] + (g.b[0] - g.a[0]) * t, cy = g.a[1] + (g.b[1] - g.a[1]) * t, cz = g.a[2] + (g.b[2] - g.a[2]) * t;
+      const d = hyp(s.x - cx, s.z - cz), dy = s.y - cy;
+      if (d < bd && dy > -0.4 && dy < 1.8) { bd = d; best = [cx, cy, cz]; }
+    }
+  }
+  if (!best) return false;
+  let nx = best[0] - s.x, nz = best[2] - s.z; const nl = hyp(nx, nz);
+  if (nl < 0.05) { nx = Math.sin(s.yaw); nz = Math.cos(s.yaw); } else { nx /= nl; nz /= nl; }
+  startPlant(s, { x: best[0], y: best[1], z: best[2], nx, nz });
+  return true;
+}
+// wall kick: ride (or fly) at a wall and hit trick — kick off it for extra air (+Adrenaline, chains into tricks)
+function wallKick(s, W) {
+  const sp = hyp(s.vx, s.vz);
+  const dx = sp > 1.5 ? s.vx / sp : Math.sin(s.yaw), dz = sp > 1.5 ? s.vz / sp : Math.cos(s.yaw);
+  let hit = false;
+  for (const hy of [0.7, 1.25]) { const d = raycast(W, s.x, s.y + hy, s.z, dx, 0, dz, 1.0); if (d < 1.0 && RAY_PRIM && RAY_PRIM.type === 'box' && primTop(RAY_PRIM) - s.y > 0.9) { hit = true; break; } }
+  if (!hit) return false;
+  const nx = -dx, nz = -dz, vn = s.vx * nx + s.vz * nz;
+  s.vx = (s.vx - 2 * vn * nx) * 0.65 + nx * 3; s.vz = (s.vz - 2 * vn * nz) * 0.65 + nz * 3;
+  s.vy = Math.max(s.vy, 0) * 0.4 + 7.6;
+  if (s.mode !== MODE.AIR) goAir(s);
+  s.vertX = 0; s.vertZ = 0; s.charge = -1; s.kickCd = 0.35; s.kickT = 0.3;
+  s.yaw = yawOf(s.vx, s.vz);
+  s.pend += TRICKS.wallkick.pts * decayOf(s, 'wallkick'); s.combo.push('wallkick'); s.hist.push('wallkick'); if (s.hist.length > 6) s.hist.shift();
+  sk_sfx(s, 'wall', 1); sk_vfx(s, 'land', 0.9);
+  return true;
+}
+
+// nearest grindable line (authored rails + box edges) within reach of the skater: [rail, segIndex, t, point]
+function edgeNear(s, W, reach = 1.25, lo = -0.7, hi = 1.3) {
+  let best = null, bd = reach;
+  for (const r of W.edges ? W.rails.concat(W.edges) : W.rails) {
+    if (railOff(r)) continue;
+    for (let k = 0; k < r.seg.length; k++) {
+      const g = r.seg[k], t = segT(s.x, s.y, s.z, g.a[0], g.a[1], g.a[2], g.b[0], g.b[1], g.b[2]);
+      const cx = g.a[0] + (g.b[0] - g.a[0]) * t, cy = g.a[1] + (g.b[1] - g.a[1]) * t, cz = g.a[2] + (g.b[2] - g.a[2]) * t;
+      const d = hyp(s.x - cx, s.z - cz), dy = cy - s.y;
+      if (d < bd && dy > lo && dy < hi) { bd = d; best = [r, k, t, cx, cy, cz]; }
+    }
+  }
+  return best;
+}
+function nearEdge(s, W) { return !!edgeNear(s, W, 1.0, -0.5, 1.1); }
+// ↑ + trick near an edge: hop onto it and grind in whichever direction you're going along it
+function grabEdge(s, W) {
+  const e = edgeNear(s, W); if (!e) return false;
+  const [r, k, t, cx, cy, cz] = e, g = r.seg[k], uh = hyp(g.ux, g.uz); if (uh < 0.2) return false;
+  let along = (s.vx * g.ux + s.vz * g.uz) / uh;
+  if (Math.abs(along) < 0.5) along = (Math.sin(s.yaw) * g.ux + Math.cos(s.yaw) * g.uz) >= 0 ? 1 : -1;
+  s.mode = MODE.GRIND; s.rail = r; s.railK = k; s.railU = t * g.l; s.railDir = along > 0 ? 1 : -1;
+  s.gs = Math.max(4, Math.abs(along) * 0.95 + 0.6); s.grindT = 0; s.trick = null; s.charge = -1; s.manual = 0;
+  s.x = cx; s.y = cy; s.z = cz; s.vertX = 0; s.vertZ = 0;
+  if (s.airT === 0 && !s.combo.length) s.airY0 = s.y; // started from the ground: an ollie onto the ledge
+  sk_sfx(s, 'pop', 0.6); sk_sfx(s, r.live ? 'zap' : 'grind', 0.8);
+  return true;
 }

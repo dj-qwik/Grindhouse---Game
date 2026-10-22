@@ -37,6 +37,7 @@ function createRound(cfg, rng = {}) {
     get alive() { let n = 0; for (const s of sk) if (s.alive) n++; return n; },
   };
   if (A.init) A.init(R);
+  addEdges(W); // grind + handplant on almost any edge
   if (R.free) R.zoneNow = { x: 0, z: 0, r: 999 }; // free ride: no squeeze, no clock, no damage, no pickups
   // free ride on arenas without a ground floor (rooftops, the pier): open air and water are walled off, invisibly.
   // Nobody can roll, ollie or get pushed off the edge of a structure.

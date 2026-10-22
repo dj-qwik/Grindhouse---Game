@@ -69,7 +69,7 @@ function howtoCard() {
           <li>Everyone spawns with a Scrap Pistol, a Splinter Bat and one Shove. Roll over glowing pedestals to grab better guns and gear (waves at 3, 17, 33 and 44 s).</li>
           <li>One life. The safe zone squeezes from 12 s; outside it you take escalating damage. From 50 s only the final core is safe and lethal pulses speed up.</li>
           <li>Last skater standing wins. At exactly 60 s the server ranks survivors by <b>health</b>, then <b>eliminations</b>, then <b>damage dealt</b>, then a <b>seeded tiebreak order</b> fixed before the match. If everyone left goes down on the same tick, the same ranking uses health from just before that tick.</li>
-          <li>Tricks don't score points: clean landings fill your <b>Adrenaline</b>. Trick + ←→↑↓ are quick flips; trick + a diagonal are the big ones (360 Flip, Laser Flip, Hardflip, 540 McTwist) that need a charged launch off a ramp. Trick with no direction at the top of a quarter pipe is a Handplant. Chain moves in one combo for up to ×2. At 50 your next melee hit lands harder; at 100 unleash a Super Slam. Repeating the same trick pays less each time.</li>
+          <li>Tricks don't score points: clean landings fill your <b>Adrenaline</b>. Trick + ←→↑↓ are quick flips; trick + a diagonal are the big ones (360 Flip, Laser Flip, Hardflip, 540 McTwist) that need a charged launch off a ramp. Trick with no direction at the top of a quarter pipe is a Handplant. Near any ledge or box edge: ↑ + trick hops on and grinds it, ↓ + trick in the air handplants on it. Ride or fly at a wall and hit trick to kick off it for extra air, then chain a trick. Chain moves in one combo for up to ×2. At 50 your next melee hit lands harder; at 100 unleash a Super Slam. Repeating the same trick pays less each time.</li>
         </ul>
       </div>
       <div style="display:grid;gap:10px;align-content:start">
@@ -166,7 +166,7 @@ function howToCard() {
   return `<div class="howpop" id="howpop">
     <b class="t">${free ? 'JUST SKATE.' : 'SKATE OR DIE.'}</b>
     ${free ? '<p class="s">No clock. No guns. Find the halfpipe and get hella air.</p>' : '<p class="s">Wreck everyone. Don\'t get wrecked. Last one rolling wins.</p>'}
-    <div class="hr"><span class="ic">⚡</span><p><b>Land tricks</b> to charge <b class="ad">ADRENALINE</b><br><small>${K('trick')} + any direction mid-air · chain 'em for combos</small></p></div>
+    <div class="hr"><span class="ic">⚡</span><p><b>Land tricks</b> to charge <b class="ad">ADRENALINE</b><br><small>${K('trick')} + any direction mid-air · kick off walls · grind any ledge · chain 'em</small></p></div>
     ${free ? '' : `<div class="hr"><span class="ic">½</span><p><b>Half full:</b> your next melee hit lands extra hard</p></div>`}
     <div class="hr"><span class="ic">💥</span><p><b>Full:</b> hit ${K('trick')} for a <b class="ad">SUPER SLAM</b>${free ? ' · bowl everyone over' : ''}</p></div>
   </div>`;

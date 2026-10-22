@@ -207,3 +207,32 @@ function perimeter(A, half, h = 4, mat = 'wall') {
 }
 // a fresh arena object every round (prims are mutated by hazards)
 function mkArena(o) { return Object.assign({ prims: [], rails: [], holes: [], floor: true, half: 40, killY: -8, spawns: [], pickups: [], zone: [], hazards: [] }, o); }
+
+// ── grindable edges: the top edges of (almost) every box become invisible grind lines (W.edges). An edge is
+// skipped when an authored rail already runs there, when a surface continues flush past it (it's not an edge),
+// and it switches off while its box is gone or has moved (collapsing roofs, press hammers, sweepers).
+function addEdges(W) {
+  W.edges = [];
+  const near = (x, y, z) => { for (const r of W.rails) for (const g of r.seg) { const t = segT(x, y, z, g.a[0], g.a[1], g.a[2], g.b[0], g.b[1], g.b[2]); const cx = g.a[0] + (g.b[0] - g.a[0]) * t, cy = g.a[1] + (g.b[1] - g.a[1]) * t, cz = g.a[2] + (g.b[2] - g.a[2]) * t; if (hyp(x - cx, z - cz) < 0.6 && Math.abs(y - cy) < 0.6) return true; } return false; };
+  for (const p of W.prims) {
+    if (p.type !== 'box' || p.gone || p.hz) continue;
+    const top = p.top, h = top - Math.max(p.y0, 0);
+    if (h < 0.35 || top > 9 || p.w < 0.5 || p.d < 0.5) continue;
+    const hw = p.w / 2 - 0.04, hd = p.d / 2 - 0.04;
+    const C = [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]].map(([lx, lz]) => offs(p.cx, p.cz, p.yaw, lx, lz));
+    for (let k = 0; k < 4; k++) {
+      const a = C[k], b = C[(k + 1) % 4], L = hyp(b[0] - a[0], b[1] - a[1]);
+      if (L < 1) continue;
+      const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
+      // outward normal: away from the box centre
+      let nx = mx - p.cx, nz = mz - p.cz; const nl = hyp(nx, nz) || 1; nx /= nl; nz /= nl;
+      const g = groundAt(W, mx + nx * 0.4, mz + nz * 0.4, top + 0.1);
+      if (g > top - 0.2) continue; // flush neighbour: not an edge
+      if (near(mx, top, mz)) continue;
+      const r = mkRail([[a[0], top, a[1]], [b[0], top, b[1]]], { kind: 'edge' });
+      r.prim = p; r.px = p.cx; r.pz = p.cz; r.ptop = p.top; r.nx = nx; r.nz = nz;
+      W.edges.push(r);
+    }
+  }
+}
+function railOff(r) { return r.gone || (r.prim && (r.prim.gone || r.prim.cx !== r.px || r.prim.cz !== r.pz || r.prim.top !== r.ptop)); }
