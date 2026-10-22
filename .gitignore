@@ -1,0 +1,14 @@
+*.env.local
+*.png
+.data/
+.env
+contracts/broadcast/
+contracts/cache/
+contracts/lib/
+contracts/out/
+dist-web/
+dist/
+game/dist-web/
+game/dist/
+node_modules
+node_modules/
