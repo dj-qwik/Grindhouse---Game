@@ -48,6 +48,8 @@ ARENAS.spillway = {
       [0, 0, -24, 'std'], [0, 0, 24, 'std'], [36, DECK, 0, 'std'], [-36, DECK, 0, 'std'], [16, DECK, -36, 'std'], [-16, DECK, 36, 'std'],
     ];
     A.zone = [{ t: 0, x: 0, z: 0, r: 62 }, { t: 12, x: 0, z: 0, r: 48 }, { t: 28, x: 0, z: bz * 0.5, r: 30 }, { t: 40, x: 0, z: bz * 0.5, r: 18 }, { t: 50, x: 0, z: bz * 0.5, r: 9 }, { t: 60, x: 0, z: bz * 0.5, r: 5 }];
+    // the halfpipe: ~4 m vert walls either side of a flat bottom, roll in from the open ends
+    halfpipe(A, 31, 2, 0, { base: 2.5 });
     return A;
   },
   update(R, dt) {

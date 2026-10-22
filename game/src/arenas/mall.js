@@ -74,9 +74,12 @@ ARENAS.mall = {
       [32, 0, 23, 'std'], [-32, 0, -23, 'std'], [-35, 0, 35, 'std'], [35, 0, -35, 'std'],
     ];
     A.zone = [{ t: 0, x: 0, z: 0, r: 62 }, { t: 12, x: 0, z: 0, r: 48 }, { t: 28, x: 0, z: 0, r: 30 }, { t: 40, x: 0, z: 0, r: 18 }, { t: 50, x: 0, z: 0, r: 9 }, { t: 60, x: 0, z: 0, r: 5 }];
+    // the halfpipe: ~4 m vert walls either side of a flat bottom, roll in from the open ends
+    { const n0 = A.prims.length, r0 = A.rails.length; halfpipe(A, 7, 36, PI / 2, { w: 6.2 }); A.hpPrims = A.prims.slice(n0); A.hpRails = A.rails.slice(r0); }
     return A;
   },
   update(R, dt) {
+    if (R.t >= 36 && R.W.hpPrims && !R.W.hpPrims[0].gone) { for (const p of R.W.hpPrims) p.gone = true; for (const r of R.W.hpRails) r.gone = true; } // security folds the halfpipe away before the shutters roll
     const A = R.W, t = R.t;
     // fountain jets: alternate diagonal pairs; warn, then erupt
     const jp = t < 40 ? 5 : 3.5, jw = t < 40 ? 1.5 : 1, jt = t - 14, ph = jt - Math.floor(jt / jp) * jp, pair = Math.floor(jt / jp) % 2;

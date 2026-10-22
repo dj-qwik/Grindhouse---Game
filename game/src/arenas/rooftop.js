@@ -52,7 +52,7 @@ ARENAS.rooftop = {
       // ── east outer strip (low roof)
       sec(nm[1], X(28), X(38), X(-12), X(12), LOW);
       P(box(X(33), 0, 10, 24, LOW, { mat: 'roof', wr: false }));
-      P(box(X(32), X(-5), 2, 5, LOW + 1.4, { y0: LOW, mat: 'metal', wr: false }), slope(X(34.75), X(-5), 5, 3.5, LOW, LOW + 1.4, { yaw: -PI / 2 + Y, y0: LOW - 0.5, mat: 'metal', wr: false }));
+      halfpipe(A, X(33), 0, 0, { base: LOW, addPrim: (p) => P(p), addRail: (r) => RL(r) }); // the halfpipe (collapses with the strip)
       ax('z', 37.75, -12, 12, LOW, PO);
       // ── north inner wing (high roof): full-width ramp down to the core, HVAC hop, billboard catwalk, steam vents
       sec(nm[2], X(-12), X(12), X(15), X(28), HIGH);
@@ -105,7 +105,7 @@ ARENAS.rooftop = {
     for (const c of A.cats) { c.hz = { kind: 'electric', x: c.x, y: c.y, z: c.z, w: c.w, d: c.d, yaw: 0, on: false, warn: 0 }; A.hz.push(c.hz); }
     for (const c of A.secs) { c.hz = { kind: 'fall', x: (c.x0 + c.x1) / 2, y: c.top, z: (c.z0 + c.z1) / 2, w: c.x1 - c.x0, d: c.z1 - c.z0, yaw: 0, on: false, warn: 0, n: c.n }; A.hz.push(c.hz); }
     // ── spawns: on the perimeter ring (outer strips + corners), billboards and HVAC units between neighbours
-    A.spawns.push([34, 4], [-34, -4], [4, -34], [-4, 34], [29, 29], [-29, -29], [29, -29], [-29, 29]);
+    A.spawns.push([33, 10.5], [-33, -10.5], [4, -34], [-4, 34], [29, 29], [-29, -29], [29, -29], [-29, 29]);
     A.pickups = [
       [-4, CORE, 4, 'center'], [4, CORE, -4, 'center'], [0, CAT, 25.5, 'center'], [0, CAT, -25.5, 'center'], [25.5, LOW, 0, 'center'], [-25.5, LOW, 0, 'center'],
       [22, MID, 22, 'std'], [-22, MID, 22, 'std'], [22, MID, -22, 'std'], [-22, MID, -22, 'std'],

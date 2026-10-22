@@ -7,7 +7,8 @@ const TICK_HZ = 60;
 const ROUND_SECONDS = 60;            // absolute gameplay cap (bible §1)
 const MAX_TICKS = ROUND_SECONDS * TICK_HZ;
 const WARMUP = 1.5;                  // no-damage movement warm-up after GO
-const G = 22;                        // arcade gravity
+const G = 22;                        // arcade gravity (on surfaces)
+const AIR_G = 18.5;                  // …and in the air: a touch floatier, more hang time for combos
 const SK_R = 0.45, SK_H = 1.8;       // skater collision capsule (same for every skater)
 const STEP = 0.35;                   // curb height you can roll up without an ollie
 const HP_MAX = 100;

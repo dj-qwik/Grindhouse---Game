@@ -92,6 +92,8 @@ ARENAS.schoolyard = {
       [22, 0, -20, 'std'], [-20, 0, 22, 'std'], [30, 3.2, -31, 'std'], [-24, 0, -28, 'std'], [-25, 0, 33, 'std'],
     ];
     A.zone = [{ t: 0, x: 0, z: 0, r: 62 }, { t: 12, x: 0, z: 0, r: 48 }, { t: 28, x: 0, z: 0, r: 30 }, { t: 40, x: 0, z: 0, r: 18 }, { t: 50, x: 0, z: 0, r: 9 }, { t: 60, x: 0, z: 0, r: 5 }];
+    // the halfpipe: ~4 m vert walls either side of a flat bottom, roll in from the open ends
+    halfpipe(A, -9, -13, 0);
     return A;
   },
   update(R, dt) {

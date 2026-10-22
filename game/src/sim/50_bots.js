@@ -96,11 +96,11 @@ function botInput(R, s) {
   else if (s.mode === MODE.GROUND && sp > 7 && RNG() < 0.006 + s.skill * 0.006) B.jump = 3 + Math.floor(RNG() * 12);
   // trick only when there's air to finish it (estimated time to land)
   const below = s.mode === MODE.AIR ? groundAt(R.W, s.x, s.z, s.y + 0.1) : s.y, h = Math.max(0, s.y - below);
-  const tLand = (s.vy + Math.sqrt(Math.max(0, s.vy * s.vy + 2 * G * h))) / G;
+  const tLand = (s.vy + Math.sqrt(Math.max(0, s.vy * s.vy + 2 * AIR_G * h))) / AIR_G;
   if (s.mode === MODE.AIR && !s.trick && !s.plant && s.airT > 0.04 && tLand > 0.62 + (1 - s.skill) * 0.25 && RNG() < s.skill * 0.2) {
     btn |= BTN.trick; B.trickDir = pickTrickDir(tLand);
   }
-  if (s.mode === MODE.AIR && !s.trick && !s.plant && s.lipY != null && s.y > s.lipY + 0.5 && s.vy < 2 && RNG() < 0.08 * s.skill) { btn |= BTN.trick; B.trickDir = -1; }
+  if (s.mode === MODE.AIR && !s.trick && !s.plant && s.lipP && s.y > s.lipP.lipH && s.vy < 2 && RNG() < 0.08 * s.skill) { btn |= BTN.trick; B.trickDir = -1; }
   if ((s.btn & BTN.trick) && s.mode === MODE.AIR) { const d = TRICK_DIRS[B.trickDir] || [0, 0]; mx = d[0]; my = d[1]; }
   // ── pick up
   // ── fight
@@ -169,9 +169,9 @@ function freeRideBot(R, s) {
   else if (s.mode === MODE.GROUND && s.onPrim && s.onPrim.type === 'slope' && s.ny < 0.97 && sp > 6 && RNG() < 0.08) B.jump = 40; // carry a charge up the ramp, pop at the lip
   // tricks whenever there's air to land them
   const below = s.mode === MODE.AIR ? groundAt(W, s.x, s.z, s.y + 0.1) : s.y, h = Math.max(0, s.y - below);
-  const tLand = (s.vy + Math.sqrt(Math.max(0, s.vy * s.vy + 2 * G * h))) / G;
+  const tLand = (s.vy + Math.sqrt(Math.max(0, s.vy * s.vy + 2 * AIR_G * h))) / AIR_G;
   if (s.mode === MODE.AIR && !s.trick && !s.plant && s.airT > 0.04 && tLand > 0.6 && RNG() < 0.25) { btn |= BTN.trick; B.trickDir = pickTrickDir(tLand); }
-  if (s.mode === MODE.AIR && !s.trick && !s.plant && s.lipY != null && s.y > s.lipY + 0.5 && s.vy < 2 && RNG() < 0.15) { btn |= BTN.trick; B.trickDir = -1; } // handplant
+  if (s.mode === MODE.AIR && !s.trick && !s.plant && s.lipP && s.y > s.lipP.lipH && s.vy < 2 && RNG() < 0.15) { btn |= BTN.trick; B.trickDir = -1; } // handplant
   if ((s.btn & BTN.trick) && s.mode === MODE.AIR) { const d = TRICK_DIRS[B.trickDir] || [0, 0]; mx = d[0]; my = d[1]; }
   return { mx, my, yaw: aimYaw, pitch: 0, btn, lag: 0 };
 }

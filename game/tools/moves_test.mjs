@@ -22,7 +22,7 @@ const run = (R, ticks, fn) => { for (let k = 0; k < ticks; k++) { const inp = { 
 // 2) ollie + kickflip off flat ground at speed, clean landing banks Adrenaline
 {
   const R = setup(-4, -28, 0, 10); let air = 0
-  run(R, 70, (k, s) => { if (s.mode === MODE.AIR) air++; return packInput({ my: 1, yaw: 0, btn: k < 26 ? BTN.jump : k === 30 ? BTN.trick : 0 }) })
+  run(R, 120, (k, s) => { if (s.mode === MODE.AIR) air++; return packInput({ my: 1, yaw: 0, btn: k < 26 ? BTN.jump : k === 30 ? BTN.trick : 0 }) })
   ok(air > 20, 'charged ollie leaves the ground', `${air} ticks airborne`)
   ok(R.sk[0].adren >= 8 && R.sk[0].mode !== MODE.DOWN, 'kickflip landed clean → +Adrenaline', `adren ${R.sk[0].adren}`)
 }
@@ -41,7 +41,7 @@ const run = (R, ticks, fn) => { for (let k = 0; k < ticks; k++) { const inp = { 
 // 5) quarter pipe: ride into the end QP without popping → vert air and back into the ramp
 {
   const R = setup(5, 18, 0, 12); let maxY = 0, cameBack = false
-  let flew = false; run(R, 200, (k, s) => { maxY = Math.max(maxY, s.y); if (s.mode === MODE.AIR) flew = true; if (maxY > 3 && s.z < 31 && s.mode === MODE.GROUND) cameBack = true; return packInput({ my: flew ? 0 : 1, yaw: 0 }) })
+  let flew = false; run(R, 260, (k, s) => { maxY = Math.max(maxY, s.y); if (s.mode === MODE.AIR) flew = true; if (maxY > 3 && s.z < 31 && s.mode === MODE.GROUND) cameBack = true; return packInput({ my: flew ? 0 : 1, yaw: 0 }) })
   ok(maxY > 3, 'quarter pipe launches you above the lip', `peak ${maxY.toFixed(1)} m`)
   ok(cameBack, 'vert air comes back down into the ramp')
 }

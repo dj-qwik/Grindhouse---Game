@@ -165,10 +165,10 @@ function howToCard() {
   const K = (a) => `<kbd>${esc(keyLabel(KEYMAP[a]))}</kbd>`, free = ROUND && ROUND.free;
   return `<div class="howpop" id="howpop">
     <b class="t">${free ? 'JUST SKATE.' : 'SKATE OR DIE.'}</b>
-    ${free ? '<p class="s">No clock. No guns. No mercy for your knees.</p>' : '<p class="s">Wreck everyone. Don\'t get wrecked. Last one rolling wins.</p>'}
+    ${free ? '<p class="s">No clock. No guns. Find the halfpipe and get hella air.</p>' : '<p class="s">Wreck everyone. Don\'t get wrecked. Last one rolling wins.</p>'}
     <div class="hr"><span class="ic">⚡</span><p><b>Land tricks</b> to charge <b class="ad">ADRENALINE</b><br><small>${K('trick')} + any direction mid-air · chain 'em for combos</small></p></div>
-    ${free ? '' : `<div class="hr"><span class="ic">½</span><p><b>Half full:</b> your next melee hit lands extra hard</p></div>
-    <div class="hr"><span class="ic">💥</span><p><b>Full:</b> hit ${K('trick')} for a <b class="ad">SUPER SLAM</b></p></div>`}
+    ${free ? '' : `<div class="hr"><span class="ic">½</span><p><b>Half full:</b> your next melee hit lands extra hard</p></div>`}
+    <div class="hr"><span class="ic">💥</span><p><b>Full:</b> hit ${K('trick')} for a <b class="ad">SUPER SLAM</b>${free ? ' · bowl everyone over' : ''}</p></div>
   </div>`;
 }
 const lockHint = () => (INPUT.usingPad ? '' : `<div class="lockhint" id="lockHint" ${INPUT.locked ? 'hidden' : ''}>Click to use the mouse</div>`);

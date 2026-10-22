@@ -165,7 +165,7 @@ function box(cx, cz, w, d, top, o = {}) { return mkPrim('box', { cx, cz, w, d, t
 function slope(cx, cz, w, d, h0, h1, o = {}) { return mkPrim('slope', { cx, cz, w, d, h0, h1, ...o }); }
 function qp(cx, cz, w, d, angDeg, o = {}) { return mkPrim('qp', { cx, cz, w, d, ang: angDeg * PI / 180, ...o }); }
 function offs(cx, cz, yaw, lx, lz) { const c = Math.cos(yaw), s = Math.sin(yaw); return [cx + lx * c + lz * s, cz - lx * s + lz * c]; }
-function kicker(A, cx, cz, w, len, h, yaw, o = {}) { const p = slope(cx, cz, w, len, 0, h, { yaw, mat: 'wood', ...o }); A.prims.push(p); return p; }
+function kicker(A, cx, cz, w, len, h, yaw, o = {}) { if (o.h1 == null) h *= 1.3; /* taller launch ramps */ const p = slope(cx, cz, w, len, 0, h, { yaw, mat: 'wood', ...o }); A.prims.push(p); return p; }
 function funbox(A, cx, cz, w, len, h, yaw, rampLen = 3, o = {}) {
   const [ax, az] = offs(cx, cz, yaw, 0, -(len / 2 + rampLen / 2)), [bx, bz] = offs(cx, cz, yaw, 0, len / 2 + rampLen / 2);
   A.prims.push(slope(ax, az, w, rampLen, 0, h, { yaw, mat: 'wood', ...o }), box(cx, cz, w, len, h, { yaw, mat: o.mat || 'concrete', wr: false }), slope(bx, bz, w, rampLen, h, 0, { yaw, mat: 'wood', ...o }));
@@ -182,6 +182,23 @@ function qpWithDeck(A, cx, cz, w, d, angDeg, yaw, deck = 2.5, o = {}) {
   const [l0x, l0z] = offs(cx, cz, yaw, -w / 2, d / 2 + 0.05), [l1x, l1z] = offs(cx, cz, yaw, w / 2, d / 2 + 0.05);
   A.rails.push(mkRail([[l0x, q.lipH, l0z], [l1x, q.lipH, l1z]], { kind: 'coping' }));
   return q;
+}
+// halfpipe(cx, cz, yaw, {base, w, flat}) — two ~4 m vert quarter pipes facing each other over a flat bottom, with
+// decks and copings. Open at both ends (you roll in from the sides along the flat). Footprint ≈ (2·(d+deck)+flat) × w.
+const HP = { d: 3.6, ang: 84, deck: 2.4, flat: 4, w: 7 }; // lip ≈ 3.2 m
+function halfpipeLen(o = {}) { return 2 * (HP.d + HP.deck) + (o.flat ?? HP.flat); }
+function halfpipe(A, cx, cz, yaw, o = {}) {
+  const w = o.w ?? HP.w, flat = o.flat ?? HP.flat, base = o.base || 0, off = flat / 2 + HP.d / 2, y0 = base > 0 ? base - 0.6 : 0;
+  for (const side of [1, -1]) {
+    const fy = side > 0 ? yaw : yaw + PI, [qx, qz] = offs(cx, cz, yaw, 0, side * off), [dx, dz] = offs(cx, cz, yaw, 0, side * (off + HP.d / 2 + HP.deck / 2));
+    const q = qp(qx, qz, w, HP.d, HP.ang, { yaw: fy, base, y0, mat: 'wood', wr: false });
+    const dk = box(dx, dz, w, HP.deck, q.lipH, { yaw: fy, y0, mat: 'metal', wr: false });
+    if (o.addPrim) { o.addPrim(q); o.addPrim(dk); } else A.prims.push(q, dk);
+    const [l0x, l0z] = offs(qx, qz, fy, -w / 2, HP.d / 2 + 0.05), [l1x, l1z] = offs(qx, qz, fy, w / 2, HP.d / 2 + 0.05);
+    const rl = mkRail([[l0x, q.lipH, l0z], [l1x, q.lipH, l1z]], { kind: 'coping' });
+    if (o.addRail) o.addRail(rl); else A.rails.push(rl);
+  }
+  A.halfpipe = { x: cx, z: cz, yaw, w, len: halfpipeLen(o), base };
 }
 function perimeter(A, half, h = 4, mat = 'wall') {
   const t = 1.2;

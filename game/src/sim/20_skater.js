@@ -8,8 +8,8 @@ const HIST = 16; // lag-compensation history (ticks)
 const MOVE = {
   pushA: 11.5, cap: 12, boostA: 15, boostCap: 14.5, maxSpeed: 22, roll: 0.35, drag: 0.0028, brake: 9.5,
   grip: 12, slideGrip: 2.8, turnLo: 5.2, turnHi: 2.5, carveKeep: 0.93,
-  pop: 6.3, popCharge: 1.7, chargeMax: 0.45, holdMax: 1.5, coyote: 0.1, jumpBuf: 0.12,
-  airA: 3.2, airTurn: 4.5, railSnap: 0.65, railMinSpeed: 2.5, wallMin: 5, wallMax: 1.1,
+  pop: 6.8, popCharge: 2.0, chargeMax: 0.45, holdMax: 1.5, coyote: 0.1, jumpBuf: 0.12,
+  airA: 3.2, airTurn: 4.5, pump: 14, railSnap: 0.65, railMinSpeed: 2.5, wallMin: 5, wallMax: 1.1,
 };
 
 function makeSkater(i, look, name) {
@@ -84,7 +84,7 @@ function pop(s) {
   sk_sfx(s, 'pop', 0.7 + 0.3 * k);
 }
 function goAir(s) {
-  s.vertX = 0; s.vertZ = 0; s.lipY = null; s.bigPop = false;
+  s.vertX = 0; s.vertZ = 0; s.lipY = null; s.lipP = null; s.bigPop = false;
   if (s.mode !== MODE.AIR) { s.mode = MODE.AIR; s.airT = 0; s.airY0 = s.y; s.airMaxY = s.y; s.airX0 = s.x; s.airZ0 = s.z; s.wallDone = false; }
 }
 
@@ -122,6 +122,10 @@ function stepGround(s, W, dt, btn, mag, dX, dZ, ctl) {
     s.vx += fx * a * dt; s.vz += fz * a * dt;
     if (boost) s.boostT = 0.35;
   }
+  // pump: pushing while you drop down a transition (quarter pipe / halfpipe wall) builds speed for bigger airs
+  if (pushing && s.onPrim && s.onPrim.type === 'qp' && s.ny < 0.97) {
+    const v = len3(s.vx, s.vy, s.vz); if (v > 1e-3 && v < MOVE.maxSpeed) { const k = Math.min(MOVE.maxSpeed, v + MOVE.pump * dt) / v; s.vx *= k; s.vy *= k; s.vz *= k; }
+  }
   // manual: trick + back on the ground — balance, combo kept alive, speed retention
   if ((btn & BTN.trick) && s.my < -0.5 && sp > 3 && s.manual < 2.5 && s.atk == null) s.manual += dt;
   else if (s.manual > 0) { if (s.manual >= 0.5) { s.pend += Math.floor(s.manual * 4); bank(s); } s.manual = 0; }
@@ -155,9 +159,9 @@ function stepGround(s, W, dt, btn, mag, dX, dZ, ctl) {
       const a = s.vx * was.s + s.vz * was.c; s.vx -= was.s * (a + 0.7); s.vz -= was.c * (a + 0.7); vert = true;
     }
     // ramp impulse (bible §5): transitions and kickers throw you a little higher than pure physics would
-    if (was && was.type !== 'box' && s.vy > 1) s.vy += was.type === 'qp' ? 2.5 : 1.0;
+    if (was && was.type !== 'box' && s.vy > 1) s.vy += was.type === 'qp' ? 3.2 : 1.5;
     goAir(s); s.coyote = MOVE.coyote; s.onPrim = null;
-    if (vert) { s.vertX = was.s; s.vertZ = was.c; s.lipY = s.y; s.lipX = s.x; s.lipZ = s.z; }
+    if (vert) { s.vertX = was.s; s.vertZ = was.c; s.lipY = s.y; s.lipX = s.x; s.lipZ = s.z; s.lipP = was; }
   }
   if (s.mode === MODE.GROUND && GP && (GP.vx || GP.vz)) { s.x += GP.vx * dt; s.z += GP.vz * dt; } // conveyors / moving decks
   // climbing a transition: the deck behind its lip is the ramp's continuation, not a wall
@@ -170,7 +174,7 @@ function stepGround(s, W, dt, btn, mag, dX, dZ, ctl) {
 function stepAir(s, W, dt, btn, press, mag, dX, dZ, ctl) {
   if (s.plant) { stepPlant(s, dt); return; }
   const oy = s.y;
-  s.vy -= G * dt;
+  s.vy -= AIR_G * dt;
   if (mag > 0.2) { // capped air control + spin toward the stick
     const sp = hyp(s.vx, s.vz), along = (s.vx * dX + s.vz * dZ) / mag;
     let ax = dX / mag * MOVE.airA * dt * ctl, az = dZ / mag * MOVE.airA * dt * ctl;
@@ -179,12 +183,14 @@ function stepAir(s, W, dt, btn, press, mag, dX, dZ, ctl) {
     const nsp = hyp(s.vx, s.vz); if (nsp > sp && nsp > 1e-4) { const k = Math.max(sp, 6) / nsp; if (k < 1) { s.vx *= k; s.vz *= k; } }
     const diff = angDiff(yawOf(dX, dZ), s.yaw); s.yaw = angWrap(s.yaw + clamp(diff, -MOVE.airTurn * dt, MOVE.airTurn * dt));
   }
+  // vert air: hang straight over the wall you launched from and come back down onto it (no drifting into the flat)
+  if (s.vertX || s.vertZ) { const o = s.vx * s.vertX + s.vz * s.vertZ, want = -0.35; s.vx += (want - o) * s.vertX; s.vz += (want - o) * s.vertZ; }
   capSpeed(s);
   // tricks: trick + direction in the air. One at a time; land before it finishes and you bail.
   if ((press & BTN.trick) && !s.trick && s.airT > 0.05 && s.adren < 100) {
     const L = s.mx < -0.35, Rt = s.mx > 0.35, U = s.my > 0.35, D = s.my < -0.35;
     // handplant: no direction, near the top of vert air over a quarter pipe's coping
-    if (!L && !Rt && !U && !D && (s.vertX || s.vertZ) && s.lipY != null && s.y > s.lipY + 0.4 && s.vy < 3.5 && hyp(s.x - s.lipX, s.z - s.lipZ) < 1.6) { startPlant(s); return; }
+    if (!L && !Rt && !U && !D && (s.vertX || s.vertZ) && s.lipP && s.y > s.lipP.lipH - 0.3 && s.vy < 3.5 && hyp(s.x - s.lipX, s.z - s.lipZ) < 1.6) { startPlant(s); return; }
     s.trick = U && L ? 'treflip' : U && Rt ? 'laser' : D && L ? 'hardflip' : D && Rt ? 'mctwist'
       : L ? 'kickflip' : Rt ? 'heelflip' : D ? 'shuvit' : U ? 'tre' : 'kickflip';
     s.trickT = 0; sk_sfx(s, TRICKS[s.trick].dur > 0.75 ? 'whoosh' : 'flick', 0.6);
@@ -208,8 +214,9 @@ function stepAir(s, W, dt, btn, press, mag, dX, dZ, ctl) {
   }
   // rails: snap when you drop onto one moving roughly along it
   if (s.vy < 2) { const r = findRail(s, W); if (r) return; }
-  // landing
-  const gy = groundAt(W, s.x, s.z, Math.max(oy, s.y) + 0.05, Math.max(oy, s.y) + 0.05);
+  // landing (coming back down a steep wall: the transition may sit a little above our feet — snap onto it)
+  const rt = (s.vertX || s.vertZ) && s.vy < 0 ? 0.9 : 0.05;
+  const gy = groundAt(W, s.x, s.z, Math.max(oy, s.y) + 0.05, Math.max(oy, s.y) + rt);
   if (gy > -1e8 && gy >= s.y) land(s, gy);
 }
 
@@ -379,7 +386,9 @@ function stepDeuce(s, W, dt) {
 // upside down for a beat, then drop back in facing down the ramp. Bankable (+26, decays on repeats).
 const PLANT_T = 0.9;
 function startPlant(s) {
-  s.plant = { t: 0, x: s.lipX + s.vertX * 0.15, y: s.lipY, z: s.lipZ + s.vertZ * 0.15, nx: s.vertX, nz: s.vertZ };
+  const p = s.lipP; toLocal(p, s.x, s.z);
+  const [cx, cz] = offs(p.cx, p.cz, p.yaw, clamp(LX, -p.w / 2 + 0.3, p.w / 2 - 0.3), p.d / 2); // a hand on the coping
+  s.plant = { t: 0, x: cx, y: p.lipH, z: cz, nx: s.vertX, nz: s.vertZ };
   s.vx = 0; s.vy = 0; s.vz = 0; s.trick = null;
   sk_sfx(s, 'grind', 0.5);
 }
@@ -392,7 +401,7 @@ function stepPlant(s, dt) {
     s.pend += TRICKS.handplant.pts * decayOf(s, 'handplant'); s.combo.push('handplant'); s.hist.push('handplant'); if (s.hist.length > 6) s.hist.shift();
     // drop back in: face down the ramp, a little inward speed so you land on the transition
     s.yaw = yawOf(-P.nx, -P.nz); s.vx = -P.nx * 2.2; s.vz = -P.nz * 2.2; s.vy = -0.5;
-    s.vertX = P.nx; s.vertZ = P.nz; s.lipY = null;
+    s.vertX = P.nx; s.vertZ = P.nz; s.lipY = null; s.lipP = null;
     sk_sfx(s, 'catch', 0.7);
   }
 }

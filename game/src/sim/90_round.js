@@ -50,7 +50,7 @@ function createRound(cfg, rng = {}) {
       else { s.x = s.fx0; s.z = s.fz0; s.vx = -s.vx * 0.2; s.vz = -s.vz * 0.2; }
     }
     // never sink into the edge of a deck or ramp you're coming down onto (or were just pushed back over)
-    if (s.mode === MODE.AIR && s.vy <= 0) { const g = groundAt(W, s.x, s.z, Math.max(s.y, s.fy0) + 0.3); if (g > s.y - 0.02 && g - s.y < 1.2) { s.y = g; s.vy = 0; } }
+    if (s.mode === MODE.AIR && s.vy <= 0) { const g = groundAt(W, s.x, s.z, Math.max(s.y, s.fy0) + 0.3); if (g > s.y - 0.02 && g - s.y < 1.2) land(s, g); }
   };
 
   // …and if anything still slips through (a plank end, a shove), an invisible net puts you back where you last rode
@@ -111,6 +111,7 @@ function createRound(cfg, rng = {}) {
         for (const s of sk) stepSkater(s, W, R.t);
         separateSkaters(sk);
         for (const s of sk) { keepOnMap(s); netCatch(s); } // open air, water and pits are walled off
+        for (const s of sk) if ((s.press & BTN.trick) && s.adren >= 100 && s.mode !== MODE.DOWN) signature(R, s); // Super Slam: bowls everyone over, no damage sticks
         stepDeuces(R);
         for (const s of sk) { if (s.fell) { R.respawns = (R.respawns || 0) + 1; s.lastRespawn = R.tick; respawn(s); } s.hp = 100; s.prevBtn = s.btn; recordHist(s, R.tick); }
         return null;

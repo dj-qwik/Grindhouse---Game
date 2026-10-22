@@ -93,7 +93,8 @@ ARENAS.boardwalk = {
     begin();
     for (const sx of [-1, 1]) {
       deck(sx * 18, 0, 12, 24, M);
-      kicker(A, sx * 20, 0, 3, 3, 1, sx * PI / 2, { y0: M - 0.8, h0: M, h1: M + 1 });
+      if (sx > 0) kicker(A, sx * 20, 0, 3, 3, 1, sx * PI / 2, { y0: M - 0.8, h0: M, h1: M + 1 });
+      else halfpipe(A, -18, 0, 0, { base: M }); // the halfpipe on the west ring side (goes when the ring does)
       fallHz(wEW, sx * 18, 0, 12, 24, M);
     }
     // roller-coaster rails: carnival platform → out over the east/west ring → arcade roof
@@ -129,7 +130,7 @@ ARENAS.boardwalk = {
     A.pickups = [
       [0, M, 0, 'center'], [5, ph, 19, 'center'], [34, B, 2, 'center'], [-34, B, -2, 'center'],
       [-5, ph, 19, 'std'], [0, M, -9, 'std'], [17, M, 17, 'std'], [-17, M, 17, 'std'], [17, M, -17, 'std'], [-17, M, -17, 'std'],
-      [5, M, 27, 'std'], [-5, M, 27, 'std'], [34, B, -12, 'std'], [-34, B, 12, 'std'], [20, M, -6, 'std'], [-20, M, 6, 'std'],
+      [5, M, 27, 'std'], [-5, M, 27, 'std'], [34, B, -12, 'std'], [-34, B, 12, 'std'], [20, M, -6, 'std'], [-18, M, 0, 'std'],
     ];
     A.zone = [{ t: 0, x: 0, z: 0, r: 62 }, { t: 12, x: 0, z: 0, r: 48 }, { t: 28, x: 0, z: 0, r: 30 }, { t: 40, x: 0, z: 0, r: 18 }, { t: 50, x: 0, z: 0, r: 9 }, { t: 60, x: 0, z: 0, r: 5 }];
     return A;

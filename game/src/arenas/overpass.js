@@ -91,6 +91,8 @@ ARENAS.overpass = {
       [-26, DK, 24, 'std'], [26, DK, -24, 'std'], [-24, 0, -15, 'std'], [24, 0, 15, 'std'],
     ];
     A.zone = [{ t: 0, x: 0, z: 0, r: 62 }, { t: 12, x: 0, z: 0, r: 48 }, { t: 28, x: 0, z: 0, r: 30 }, { t: 40, x: 0, z: 0, r: 18 }, { t: 50, x: 0, z: 0, r: 9 }, { t: 60, x: 0, z: 0, r: 5 }];
+    // the halfpipe: ~4 m vert walls either side of a flat bottom, roll in from the open ends
+    halfpipe(A, -30, 15, PI / 2);
     return A;
   },
   update(R, dt) {
