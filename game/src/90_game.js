@@ -69,7 +69,7 @@ function howtoCard() {
           <li>Everyone spawns with a Scrap Pistol, a Splinter Bat and one Shove. Roll over glowing pedestals to grab better guns and gear (waves at 3, 17, 33 and 44 s).</li>
           <li>One life. The safe zone squeezes from 12 s; outside it you take escalating damage. From 50 s only the final core is safe and lethal pulses speed up.</li>
           <li>Last skater standing wins. At exactly 60 s the server ranks survivors by <b>health</b>, then <b>eliminations</b>, then <b>damage dealt</b>, then a <b>seeded tiebreak order</b> fixed before the match. If everyone left goes down on the same tick, the same ranking uses health from just before that tick.</li>
-          <li>Tricks don't score points: clean landings fill your <b>Adrenaline</b>. Trick + ←→↑↓ are quick flips; trick + a diagonal are the big ones (360 Flip, Laser Flip, Hardflip, 540 McTwist) that need a charged launch off a ramp. Trick with no direction at the top of a quarter pipe is a Handplant. Near any ledge or box edge: ↑ + trick hops on and grinds it, ↓ + trick in the air handplants on it. Ride or fly at a wall and hit trick to kick off it for extra air, then chain a trick. Chain moves in one combo for up to ×2. At 50 your next melee hit lands harder; at 100 unleash a Super Slam. Repeating the same trick pays less each time.</li>
+          <li>Tricks don't score points: clean landings fill your <b>Adrenaline</b>. Trick + ←→↑↓ are quick flips; trick + a diagonal are the big ones (360 Flip, Laser Flip, Hardflip, 540 McTwist) that need a charged launch off a ramp. Trick with no direction at the top of a quarter pipe is a Handplant. Grinding is never automatic: hold ↑ + trick near any rail, ledge, ramp side or box edge (on the ground or in the air) and you snap onto it — grinds carry round box corners. ↓ + trick in the air handplants on an edge. Ride or fly at a wall and hit trick to kick off it for extra air, then chain a trick. Chain moves in one combo for up to ×2. At 50 your next melee hit lands harder; at 100 unleash a Super Slam. Repeating the same trick pays less each time.</li>
         </ul>
       </div>
       <div style="display:grid;gap:10px;align-content:start">
@@ -80,7 +80,7 @@ function howtoCard() {
           ${k('throw')}<span>Throw / shove</span><kbd>Mouse</kbd><span>Look and steer</span>
         </div>
         <p class="fine" style="padding:0">Controller: left stick steer (pull back to brake), right stick look, A ollie, RT attack, X trick / slam, B throw.</p>
-        <p class="fine" style="padding:0">Weapons are picked up automatically when you roll over an upgrade. Attack uses your gun, or your melee weapon when someone's close. Hold a direction while you trick for different flips (diagonals = big tricks). Drop onto rails to grind; hit tall walls in the air to wallride.</p>
+        <p class="fine" style="padding:0">Weapons are picked up automatically when you roll over an upgrade. Attack uses your gun, or your melee weapon when someone's close. Hold a direction while you trick for different flips (diagonals = big tricks). Hold ↑ + trick near anything with an edge to grind it; hit tall walls in the air to wallride or kick off them.</p>
       </div>
     </div>
     <div class="row"><button class="btn primary" id="back">Got it</button></div>

@@ -125,6 +125,7 @@ function botInput(R, s) {
       if (s.thr === 'shove' ? td < 2 && RNG() < 0.03 : td > 6 && td < 15 && B.los && RNG() < 0.02 + s.skill * 0.02) { btn |= BTN.throw; pitch = s.thr === 'shove' ? pitch : clamp((td - 8) * 0.03, -0.2, 0.35); }
     }
   }
+  ({ mx, my, btn } = botGrind(R, s, B, mx, my, btn));
   return { mx, my, yaw: aimYaw, pitch, btn, lag: 0 };
 }
 
@@ -173,9 +174,33 @@ function freeRideBot(R, s) {
   if (s.mode === MODE.AIR && !s.trick && !s.plant && s.airT > 0.04 && tLand > 0.6 && RNG() < 0.25) { btn |= BTN.trick; B.trickDir = pickTrickDir(tLand); }
   if (s.mode === MODE.AIR && !s.trick && !s.plant && s.lipP && s.y > s.lipP.lipH && s.vy < 2 && RNG() < 0.15) { btn |= BTN.trick; B.trickDir = -1; } // handplant
   if ((s.btn & BTN.trick) && s.mode === MODE.AIR) { const d = TRICK_DIRS[B.trickDir] || [0, 0]; mx = d[0]; my = d[1]; }
+  ({ mx, my, btn } = botGrind(R, s, B, mx, my, btn, 0.7));
   return { mx, my, yaw: aimYaw, pitch: 0, btn, lag: 0 };
 }
 
 // trick stick directions: ← → ↓ ↑, then the diagonals ↖ ↗ ↙ ↘ (the big ones, only with plenty of air)
 const TRICK_DIRS = [[-1, 0], [1, 0], [0, -1], [0, 1], [-0.75, 0.75], [0.75, 0.75], [-0.75, -0.75], [0.75, -0.75]];
 function pickTrickDir(tLand) { return tLand > 1.15 && RNG() < 0.7 ? 4 + Math.floor(RNG() * 4) : tLand > 0.85 ? Math.floor(RNG() * 4) : Math.floor(RNG() * 2); }
+
+// grinding is never automatic: bots hold ↑ + trick like players do — sometimes as they ollie onto a ledge,
+// sometimes as they come down near a rail (decided once per jump)
+function botGrind(R, s, B, mx, my, btn, keen = 0.45) {
+  if (s.mode === MODE.GRIND) { // ride it for a bit, then pop off
+    if (!B.gMax) { B.gMax = 0.5 + RNG() * 1.8; B.gT = 0; }
+    B.gT += DT; B.gAir = false;
+    return { mx, my, btn: B.gT > B.gMax ? btn | BTN.jump : btn & ~BTN.jump };
+  }
+  B.gMax = 0;
+  if (s.adren >= 100 || s.plant) { B.gAir = false; return { mx, my, btn }; }
+  if (s.mode === MODE.AIR) {
+    if (!B.gAir) { B.gAir = true; B.gPlan = RNG() < keen; }
+    if (B.gPlan && !s.trick && edgeNear(s, R.W, 2.0, -1.4, 1.7)) return { mx: 0, my: 1, btn: btn | BTN.trick };
+  } else {
+    B.gAir = false;
+    if (s.mode === MODE.GROUND && hyp(s.vx, s.vz) > 5 && RNG() < keen * 0.04) {
+      const e = edgeNear(s, R.W, 1.5, -0.3, 1.5);
+      if (e) { const g = e[0].seg[e[1]], uh = hyp(g.ux, g.uz), sp = hyp(s.vx, s.vz); if (uh > 0.2 && Math.abs(s.vx * g.ux + s.vz * g.uz) / (uh * sp) > 0.7) return { mx: 0, my: 1, btn: btn | BTN.trick }; }
+    }
+  }
+  return { mx, my, btn };
+}

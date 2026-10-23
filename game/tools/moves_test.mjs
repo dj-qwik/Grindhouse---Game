@@ -34,9 +34,27 @@ const run = (R, ticks, fn) => { for (let k = 0; k < ticks; k++) { const inp = { 
 }
 // 4) grind: hop onto the deck rail (x = 20, y 3.1, z 10..24) moving along it
 {
-  const R = setup(20, 8, 0, 9); const s = R.sk[0]; s.y = 3.3; s.vy = 1; s.mode = MODE.AIR
-  let ground = false; run(R, 40, (k, sk) => { if (sk.mode === MODE.GRIND) ground = true; return packInput({ yaw: 0 }) })
-  ok(ground, 'dropping onto a rail while moving along it starts a grind')
+  { const R = setup(20, 8, 0, 9); const s = R.sk[0]; s.y = 3.3; s.vy = 1; s.mode = MODE.AIR
+    let g = false; run(R, 40, (k, sk) => { if (sk.mode === MODE.GRIND) g = true; return packInput({ yaw: 0 }) })
+    ok(!g, 'landing on a rail without the grind input does NOT grind') }
+  { const R = setup(21.8, 8, 0, 9); const s = R.sk[0]; s.y = 3.6; s.vy = 1; s.mode = MODE.AIR // 1.8 m to the side of it
+    let g = false; run(R, 40, (k, sk) => { if (sk.mode === MODE.GRIND) g = true; return packInput({ yaw: 0, my: 1, btn: BTN.trick }) })
+    ok(g, 'holding ↑ + trick near a rail (1.8 m off) snaps you onto it') }
+  { // ground: ↑ + trick while rolling alongside a ledge ollies you onto it
+    const R = setup(21.4, 8, 0, 8); const s = R.sk[0]; s.y = sim.groundAt(R.W, s.x, s.z, 50); s.mode = MODE.GROUND
+    let g = false; run(R, 40, (k, sk) => { if (sk.mode === MODE.GRIND) g = true; return packInput({ yaw: 0, my: 1, btn: k > 2 ? BTN.trick : 0 }) })
+    ok(g, 'holding ↑ + trick beside a ledge pops you onto it', `y ${R.sk[0].y.toFixed(1)}`) }
+}
+// 4b) grind round the corners of a box (closed loop edges)
+{
+  const S4 = createSim({ seed: 1 }), R = S4.createRound({ key: 'mall', seed: 4242, players: [{ i: 0 }, { i: 1 }] })
+  const loop = R.W.edges.find((e) => e.closed && e.pts[0][1] < 3.2 && e.seg.every((g) => g.l > 1.5)); const s = R.sk[0], o = R.sk[1]; o.x = -30; o.z = -30
+  if (loop) {
+    const g = loop.seg[0]; s.x = (g.a[0] + g.b[0]) / 2; s.z = (g.a[2] + g.b[2]) / 2; s.y = g.a[1] + 0.6; s.vx = g.ux * 9; s.vz = g.uz * 9; s.vy = 0; s.mode = MODE.AIR; s.yaw = Math.atan2(g.ux, g.uz)
+    let segs = new Set(), t = 0
+    for (let k = 0; k < 120; k++) { R.step({ 0: packInput({ yaw: s.yaw, my: 1, btn: BTN.trick }), 1: packInput({}) }); if (s.mode === MODE.GRIND && s.rail === loop) { segs.add(s.railK); t++ } }
+    ok(segs.size >= 2, 'a grind carries round the corner of a box', `${segs.size} sides, ${(t / 60).toFixed(1)} s`)
+  } else ok(false, 'found a box with a full edge loop on the mall')
 }
 // 5) quarter pipe: ride into the end QP without popping → vert air and back into the ramp
 {

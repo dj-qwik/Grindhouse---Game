@@ -214,24 +214,38 @@ function mkArena(o) { return Object.assign({ prims: [], rails: [], holes: [], fl
 function addEdges(W) {
   W.edges = [];
   const near = (x, y, z) => { for (const r of W.rails) for (const g of r.seg) { const t = segT(x, y, z, g.a[0], g.a[1], g.a[2], g.b[0], g.b[1], g.b[2]); const cx = g.a[0] + (g.b[0] - g.a[0]) * t, cy = g.a[1] + (g.b[1] - g.a[1]) * t, cz = g.a[2] + (g.b[2] - g.a[2]) * t; if (hyp(x - cx, z - cz) < 0.6 && Math.abs(y - cy) < 0.6) return true; } return false; };
+  const tag = (r, p) => { r.prim = p; r.px = p.cx; r.pz = p.cz; r.ptop = p.top; return r; };
   for (const p of W.prims) {
-    if (p.type !== 'box' || p.gone || p.hz) continue;
-    const top = p.top, h = top - Math.max(p.y0, 0);
-    if (h < 0.35 || top > 9 || p.w < 0.5 || p.d < 0.5) continue;
-    const hw = p.w / 2 - 0.04, hd = p.d / 2 - 0.04;
-    const C = [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]].map(([lx, lz]) => offs(p.cx, p.cz, p.yaw, lx, lz));
-    for (let k = 0; k < 4; k++) {
-      const a = C[k], b = C[(k + 1) % 4], L = hyp(b[0] - a[0], b[1] - a[1]);
-      if (L < 1) continue;
-      const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
-      // outward normal: away from the box centre
-      let nx = mx - p.cx, nz = mz - p.cz; const nl = hyp(nx, nz) || 1; nx /= nl; nz /= nl;
-      const g = groundAt(W, mx + nx * 0.4, mz + nz * 0.4, top + 0.1);
-      if (g > top - 0.2) continue; // flush neighbour: not an edge
-      if (near(mx, top, mz)) continue;
-      const r = mkRail([[a[0], top, a[1]], [b[0], top, b[1]]], { kind: 'edge' });
-      r.prim = p; r.px = p.cx; r.pz = p.cz; r.ptop = p.top; r.nx = nx; r.nz = nz;
-      W.edges.push(r);
+    if (p.gone || p.hz || p.w < 0.5 || p.d < 0.5) continue;
+    if (p.type === 'box') {
+      const top = p.top, h = top - Math.max(p.y0, 0);
+      if (h < 0.3 || top > 9) continue;
+      const hw = p.w / 2 - 0.04, hd = p.d / 2 - 0.04;
+      const C = [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]].map(([lx, lz]) => offs(p.cx, p.cz, p.yaw, lx, lz));
+      const ok = [];
+      for (let k = 0; k < 4; k++) {
+        const a = C[k], b = C[(k + 1) % 4], mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
+        let nx = mx - p.cx, nz = mz - p.cz; const nl = hyp(nx, nz) || 1; nx /= nl; nz /= nl;
+        ok.push(groundAt(W, mx + nx * 0.4, mz + nz * 0.4, top + 0.1) <= top - 0.2 && !near(mx, top, mz));
+      }
+      // chain neighbouring edges so a grind carries round the corners (all four → a closed loop round the box)
+      if (ok.every(Boolean)) { W.edges.push(tag(mkRail([...C, C[0]].map((c) => [c[0], top, c[1]]), { kind: 'edge', closed: true }), p)); continue; }
+      const start = ok.findIndex((v, k) => !v); // begin each chain right after a missing edge
+      let run = [];
+      for (let n = 1; n <= 4; n++) {
+        const k = (start + n) % 4;
+        if (ok[k]) { if (!run.length) run.push(C[k]); run.push(C[(k + 1) % 4]); }
+        if (!ok[k] || n === 4) { if (run.length >= 2) W.edges.push(tag(mkRail(run.map((c) => [c[0], top, c[1]]), { kind: 'edge' }), p)); run = []; }
+      }
+    } else if (p.type === 'slope') {
+      // ramp sides: the sloped side edges of kickers / funbox ramps / stair sets
+      const hi = Math.max(p.h0, p.h1); if (hi < 0.5 || hi > 9 || p.d < 1.5) continue;
+      for (const sx of [-1, 1]) {
+        const lx = sx * (p.w / 2 - 0.04), a = offs(p.cx, p.cz, p.yaw, lx, -p.d / 2 + 0.05), b = offs(p.cx, p.cz, p.yaw, lx, p.d / 2 - 0.05);
+        const [ox, oz] = offs(p.cx, p.cz, p.yaw, lx + sx * 0.4, 0); const midH = (p.h0 + p.h1) / 2;
+        if (groundAt(W, ox, oz, midH + 0.1) > midH - 0.2 || near(...offs(p.cx, p.cz, p.yaw, lx, 0).flatMap((v, k) => k ? [midH, v] : [v]))) continue;
+        W.edges.push(tag(mkRail([[a[0], p.h0 + 0.02, a[1]], [b[0], p.h1 + 0.02, b[1]]], { kind: 'edge' }), p));
+      }
     }
   }
 }

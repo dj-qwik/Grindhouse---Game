@@ -55,7 +55,8 @@ function stepSkater(s, W, t) {
   const mag = s.slipT > 0 ? 0 : hyp(s.mx, s.my); // slipping in someone's mess: no steering, no push
   const [dX, dZ] = stickWorld(s, s.mx, s.my);
   s.kickCd = (s.kickCd || 0) - dt; s.kickT = (s.kickT || 0) - dt;
-  if ((press & BTN.trick) && s.adren < 100 && s.mode === MODE.GROUND && s.my > 0.35 && Math.abs(s.mx) < 0.35 && grabEdge(s, W)) return;
+  const grindHeld = (btn & BTN.trick) && s.my > 0.35 && Math.abs(s.mx) < 0.5 && s.adren < 100; // ↑ + trick = grind
+  if (grindHeld && s.mode === MODE.GROUND && s.railCd <= 0 && grabEdge(s, W, 1.7, -0.3, 1.7)) return;
   if ((press & BTN.trick) && s.adren < 100 && !s.trick && !s.plant && s.kickCd <= 0 && (s.mode === MODE.GROUND || s.mode === MODE.AIR) && !nearEdge(s, W) && wallKick(s, W)) return;
   if (s.mode === MODE.GRIND) { stepGrind(s, W, dt); return; }
   if (s.mode === MODE.WALL) { stepWall(s, W, dt); return; }
@@ -194,7 +195,7 @@ function stepAir(s, W, dt, btn, press, mag, dX, dZ, ctl) {
     const L = s.mx < -0.35, Rt = s.mx > 0.35, U = s.my > 0.35, D = s.my < -0.35;
     // handplant: no direction, near the top of vert air over a quarter pipe's coping
     if (!L && !Rt && !U && !D && (s.vertX || s.vertZ) && s.lipP && s.y > s.lipP.lipH - 0.3 && s.vy < 3.5 && hyp(s.x - s.lipX, s.z - s.lipZ) < 1.6) { startPlant(s); return; }
-    if (U && !L && !Rt && grabEdge(s, W)) return;          // ↑ + trick near an edge: grind it
+    if (U && !L && !Rt && grabEdge(s, W, 2.1, -1.4, 1.7)) return; // ↑ + trick near an edge: grind it
     if (D && !L && !Rt && s.vy < 3.5 && edgePlant(s, W)) return; // ↓ + trick near an edge: handplant on it
     s.trick = U && L ? 'treflip' : U && Rt ? 'laser' : D && L ? 'hardflip' : D && Rt ? 'mctwist'
       : L ? 'kickflip' : Rt ? 'heelflip' : D ? 'shuvit' : U ? 'tre' : 'kickflip';
@@ -218,7 +219,7 @@ function stepAir(s, W, dt, btn, press, mag, dX, dZ, ctl) {
     }
   }
   // rails: snap when you drop onto one moving roughly along it
-  if (s.vy < 2) { const r = findRail(s, W); if (r) return; }
+  if ((btn & BTN.trick) && s.my > 0.35 && Math.abs(s.mx) < 0.5 && s.adren < 100 && s.railCd <= 0 && grabEdge(s, W, 2.1, -1.4, 1.7)) return; // held ↑ + trick: snap onto it
   // landing (coming back down a steep wall: the transition may sit a little above our feet — snap onto it)
   const rt = (s.vertX || s.vertZ) && s.vy < 0 ? 0.9 : 0.05;
   const gy = groundAt(W, s.x, s.z, Math.max(oy, s.y) + 0.05, Math.max(oy, s.y) + rt);
@@ -324,8 +325,9 @@ function stepGrind(s, W, dt) {
   s.railU += s.railDir * s.gs * dt;
   while (s.railU > g.l || s.railU < 0) {
     const over = s.railU > g.l ? s.railU - g.l : -s.railU, nk = s.railK + s.railDir;
-    if (nk < 0 || nk >= r.seg.length) { s.railU = clamp(s.railU, 0, g.l); const p = railPoint(r, s.railK, s.railU); s.x = p[0]; s.y = p[1]; s.z = p[2]; leave(false); return; }
-    s.railK = nk; g = r.seg[nk]; s.railU = s.railDir > 0 ? over : g.l - over;
+    let nk2 = nk; if (r.closed) nk2 = (nk + r.seg.length) % r.seg.length; // round the corner of a box, forever
+    if (nk2 < 0 || nk2 >= r.seg.length) { s.railU = clamp(s.railU, 0, g.l); const p = railPoint(r, s.railK, s.railU); s.x = p[0]; s.y = p[1]; s.z = p[2]; leave(false); return; }
+    s.railK = nk2; g = r.seg[nk2]; s.railU = s.railDir > 0 ? over : g.l - over;
   }
   const p = railPoint(r, s.railK, s.railU);
   s.x = p[0]; s.y = p[1]; s.z = p[2];
@@ -452,22 +454,24 @@ function wallKick(s, W) {
 
 // nearest grindable line (authored rails + box edges) within reach of the skater: [rail, segIndex, t, point]
 function edgeNear(s, W, reach = 1.25, lo = -0.7, hi = 1.3) {
-  let best = null, bd = reach;
+  // prefers the closest line; a little weight on height so a rail at your feet beats one over your head
+  let best = null, bd = 1e9;
   for (const r of W.edges ? W.rails.concat(W.edges) : W.rails) {
-    if (railOff(r)) continue;
+    if (railOff(r) || (r === s.lastRail && s.railCd > 0)) continue;
     for (let k = 0; k < r.seg.length; k++) {
       const g = r.seg[k], t = segT(s.x, s.y, s.z, g.a[0], g.a[1], g.a[2], g.b[0], g.b[1], g.b[2]);
       const cx = g.a[0] + (g.b[0] - g.a[0]) * t, cy = g.a[1] + (g.b[1] - g.a[1]) * t, cz = g.a[2] + (g.b[2] - g.a[2]) * t;
       const d = hyp(s.x - cx, s.z - cz), dy = cy - s.y;
-      if (d < bd && dy > lo && dy < hi) { bd = d; best = [r, k, t, cx, cy, cz]; }
+      const score = d + Math.max(0, dy) * 0.25;
+      if (d < reach && dy > lo && dy < hi && score < bd) { bd = score; best = [r, k, t, cx, cy, cz]; }
     }
   }
   return best;
 }
 function nearEdge(s, W) { return !!edgeNear(s, W, 1.0, -0.5, 1.1); }
 // ↑ + trick near an edge: hop onto it and grind in whichever direction you're going along it
-function grabEdge(s, W) {
-  const e = edgeNear(s, W); if (!e) return false;
+function grabEdge(s, W, reach, lo, hi) {
+  const e = edgeNear(s, W, reach, lo, hi); if (!e) return false;
   const [r, k, t, cx, cy, cz] = e, g = r.seg[k], uh = hyp(g.ux, g.uz); if (uh < 0.2) return false;
   let along = (s.vx * g.ux + s.vz * g.uz) / uh;
   if (Math.abs(along) < 0.5) along = (Math.sin(s.yaw) * g.ux + Math.cos(s.yaw) * g.uz) >= 0 ? 1 : -1;
