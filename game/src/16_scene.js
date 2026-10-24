@@ -88,15 +88,34 @@ function updateCamera(R, dt, tv, opts = {}) {
   if (!CAMR.piv || CAMR.piv.distanceTo(pivot) > 6) CAMR.piv = pivot.clone(); else CAMR.piv.lerp(pivot, k);
   const P = CAMR.piv;
   // occlusion: pull the camera in front of whatever is between it and the skater (in at once, back out gently)
+  // Five rays (centre + a ring the size of the lens) so a wall at a grazing angle can't slip between the
+  // camera and the skater and get clipped by the near plane.
   let d = dist;
-  if (R && R.W) { const hit = SIM0.raycast(R.W, P.x, P.y, P.z, -fx, -fy, -fz, dist); d = Math.max(0.9, Math.min(dist, hit - 0.25)); }
+  if (R && R.W) {
+    const ux = -fy * Math.sin(yaw), uy = cp, uz = -fy * Math.cos(yaw), o = 0.32; // camera up vector
+    for (const [a, b] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const ex = P.x - fx * dist + (rx * a + ux * b) * o, ey = P.y - fy * dist + uy * b * o, ez = P.z - fz * dist + (rz * a + uz * b) * o;
+      const vx = ex - P.x, vy = ey - P.y, vz = ez - P.z, L = Math.hypot(vx, vy, vz);
+      const hit = SIM0.raycast(R.W, P.x, P.y, P.z, vx / L, vy / L, vz / L, L);
+      d = Math.min(d, (hit - 0.3) * dist / L);
+    }
+    d = Math.max(0.35, d);
+  }
   CAMR.d = CAMR.d == null || d < CAMR.d ? d : CAMR.d + (d - CAMR.d) * Math.min(1, dt * 4);
   const want = new T.Vector3(P.x - fx * CAMR.d, P.y - fy * CAMR.d, P.z - fz * CAMR.d);
-  if (R && R.W) { const gy = SIM0.groundAt(R.W, want.x, want.z, want.y + 0.5); if (gy > -1e8 && want.y < gy + 0.35) want.y = gy + 0.35; }
+  if (R && R.W) {
+    // never outside the arena's boundary walls (you'd see the back of the set)
+    if (R.W.floor) { const lim = R.W.half - 0.35; want.x = Math.max(-lim, Math.min(lim, want.x)); want.z = Math.max(-lim, Math.min(lim, want.z)); }
+    // squeezed in close (back to a wall): rise up and look down over the skater instead of staring at their back
+    const hd = Math.hypot(want.x - P.x, want.z - P.z); if (hd < 1.6) { const head = SIM0.raycast(R.W, P.x, P.y, P.z, 0, 1, 0, 2.5); want.y = Math.max(want.y, Math.min(P.y + (1.6 - hd) * 1.1, P.y + head - 0.3)); }
+    const gy = SIM0.groundAt(R.W, want.x, want.z, want.y + 0.5); if (gy > -1e8 && want.y < gy + 0.35) want.y = gy + 0.35;
+  }
   CAMR.pos.copy(want);
   cam.position.copy(CAMR.pos);
   const sk = PFX.shake * 0.25; cam.position.x += R3(sk); cam.position.y += R3(sk); cam.position.z += R3(sk);
-  cam.lookAt(P.x + fx * 10, P.y + fy * 10, P.z + fz * 10);
+  // when the camera had to rise (squeezed against a wall), tip it down so the skater stays in frame
+  const lift = Math.max(0, CAMR.pos.y - (P.y - fy * CAMR.d)), tipK = Math.min(1, lift / 1.6);
+  cam.lookAt(P.x + fx * 10 * (1 - tipK * 0.85), P.y + fy * 10 * (1 - tipK) - tipK * 1.2, P.z + fz * 10 * (1 - tipK * 0.85));
   cam.fov = CAMR.fov; cam.updateProjectionMatrix();
   // sun follows the action so shadows stay crisp near the camera
   const sd = GFX.sunDir || new T.Vector3(0.5, 0.8, 0.3);

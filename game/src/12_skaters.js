@@ -182,7 +182,11 @@ function poseRig(r, s, dt, view) {
     root.rotateX(-Math.PI * (u - out) * 0.92); root.position.y += 1.55 * (u - out);
     B.position.y = 0.05; feetLift = 0.05;
   }
-  if (s.mode === MODE.WALL) { const side = Math.sign(-Math.cos(yaw) * s.wallNx + Math.sin(yaw) * s.wallNz) || 1; root.rotateZ(side * 1.15); }
+  if (s.mode === MODE.WALL) { // wallride: the board rolls up onto the wall, the rider stays mostly upright, crouched over it
+    const side = Math.sign(-Math.cos(yaw) * s.wallNx + Math.sin(yaw) * s.wallNz) || 1;
+    root.position.x -= s.wallNx * 0.22; root.position.z -= s.wallNz * 0.22; // wheels against the wall, not hovering off it
+    root.rotateZ(side * 0.42); B.rotation.z = side * 0.95; r.crouch += (0.6 - r.crouch) * Math.min(1, dt * 10);
+  }
   if (s.mode === MODE.GROUND && s.onPrim && s.ny < 0.99) { // tilt with the ramp
     const nx = s.nx, nz = s.nz, f = Math.sin(yaw) * nx + Math.cos(yaw) * nz, sd = Math.cos(yaw) * nx - Math.sin(yaw) * nz;
     root.rotateX(Math.asin(Math.max(-1, Math.min(1, f)))); root.rotateZ(-Math.asin(Math.max(-1, Math.min(1, sd))));
