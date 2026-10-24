@@ -189,6 +189,9 @@ body.freeride #hBar,body.freeride .hweap{display:none}
 @keyframes howIn{from{opacity:0;transform:translateX(-50%) rotate(-6deg) scale(.7)}to{opacity:1;transform:translateX(-50%) rotate(-1.5deg) scale(1)}}
 @media (max-height:600px){.howpop{top:4%;padding:10px 14px;gap:6px}.howpop .t{font-size:32px}.howpop .s,.howpop .hr p{font-size:15px}.howpop .ic{width:30px;height:30px;font-size:16px}}
 .howpop ~ .countdown{inset:auto;left:50%;top:calc(15% - 30px);transform:translateX(min(250px,calc(50vw - 70px)));font-size:84px;text-shadow:4px 4px 0 var(--ink),8px 8px 0 var(--coral);z-index:2}
+#np{position:fixed;right:18px;top:78px;z-index:30;display:grid;gap:2px;justify-items:end;padding:8px 12px;background:var(--panel);border:2px solid var(--ink);border-radius:8px;box-shadow:3px 3px 0 var(--lime);color:var(--cream);opacity:0;transform:translateX(30px);pointer-events:none}
+#np small{font:700 10px/1 var(--mono,monospace);letter-spacing:1.5px;color:var(--dim)}#np b{font:18px/1.1 var(--display)}
+#np.on{animation:npIn 4.5s ease forwards}@keyframes npIn{0%{opacity:0;transform:translateX(30px)}8%{opacity:1;transform:none}85%{opacity:1;transform:none}100%{opacity:0;transform:translateX(30px)}}
 </style>
 </head>
 <body>

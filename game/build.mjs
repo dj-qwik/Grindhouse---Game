@@ -74,6 +74,8 @@ const gameName = `game-${hash(js)}.js`
 for (const f of fs.readdirSync(webDir)) if (/^game-.*\.js$/.test(f)) fs.rmSync(path.join(webDir, f))
 fs.writeFileSync(path.join(webDir, gameName), js)
 for (const f of fs.readdirSync(path.join(ROOT, 'vendor'))) fs.copyFileSync(path.join(ROOT, 'vendor', f), path.join(webDir, 'vendor', f))
+// audio + other static assets (soundtrack, sound effects)
+if (fs.existsSync(path.join(ROOT, 'assets'))) fs.cpSync(path.join(ROOT, 'assets'), path.join(webDir, 'assets'), { recursive: true })
 const head = rd('head.html')
 fs.writeFileSync(path.join(webDir, 'index.html'), `<!doctype html>
 <html lang="en">

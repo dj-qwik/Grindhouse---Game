@@ -31,7 +31,31 @@ function audioInit() {
     noiseBuf = actx.createBuffer(1, actx.sampleRate * 2, actx.sampleRate);
     const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     distCurve = new Float32Array(1024); for (let i = 0; i < 1024; i++) { const x = i / 512 - 1; distCurve[i] = Math.tanh(x * 3.2); }
+    loadSfx();
+    musicStart(); // the soundtrack starts with the first click / key press (browsers need a gesture for audio)
   } catch { actx = null; }
+}
+// ── recorded sound effects (Kenney CC0 impacts + sounds made for this game; tools/audio/build_sfx.py).
+// Until (or unless) they load, the synthesised SOUNDS below play instead.
+const SFXB = {}; let SFX_META = {};
+async function loadSfx() {
+  try {
+    SFX_META = await (await fetch('/assets/audio/sfx/manifest.json')).json();
+    const jobs = [];
+    for (const [name, m] of Object.entries(SFX_META)) for (let k = 0; k < m.n; k++) jobs.push([name, k]);
+    let next = 0;
+    const worker = async () => { while (next < jobs.length) { const [name, k] = jobs[next++]; try { const buf = await actx.decodeAudioData(await (await fetch(`/assets/audio/sfx/${name}_${k}.mp3`)).arrayBuffer()); (SFXB[name] || (SFXB[name] = []))[k] = buf; } catch {} } };
+    await Promise.all([worker(), worker(), worker(), worker()]);
+  } catch {}
+}
+function playBuf(name, dest, vol, rate = 1) {
+  const list = SFXB[name]; if (!list || !list.length) return false;
+  const buf = list[Math.floor(Math.random() * list.length)]; if (!buf) return false;
+  const src = actx.createBufferSource(), g = actx.createGain();
+  src.buffer = buf; src.playbackRate.value = rate * (1 + (Math.random() - 0.5) * 0.08); // a little variety
+  g.gain.value = vol * ((SFX_META[name] && SFX_META[name].g) || 1) * 1.1;
+  src.connect(g); g.connect(dest); src.start();
+  return true;
 }
 function setMuted(m) { AUDIO.muted = m; store.set('gh_muted', m ? '1' : '0'); if (master) master.gain.value = m ? 0 : AUDIO.vol; const b = $('#mute'); if (b) b.textContent = m ? '🔇' : '🔊'; }
 addEventListener('pointerdown', audioInit, { capture: true }); addEventListener('keydown', audioInit, { capture: true });
@@ -110,9 +134,9 @@ const SOUNDS = {
 };
 function playSfx(name, x, y, z, vol = 1) {
   if (!actx || AUDIO.muted) return;
-  const fn = SOUNDS[name]; if (!fn) return;
+  const fn = SOUNDS[name];
   const sp = spatial(x, y, z); if (sp.g < 0.02) return;
-  try { fn(out(sp.g, sp.p), vol); } catch {}
+  try { const o = out(sp.g, sp.p); if (!playBuf(name, o, vol) && fn) fn(o, vol); } catch {}
 }
 // rolling wheels + grind loop for the camera's skater (surface + speed driven)
 const ROLL = { src: null, f: null, g: null, gs: null, gg: null };
@@ -128,6 +152,18 @@ function rollUpdate(speed, grounded, grinding) {
     ROLL.src.start();
   }
   const now = actx.currentTime;
+  if (!ROLL.rec && SFXB.rollloop && SFXB.grindloop && SFXB.rollloop[0] && SFXB.grindloop[0]) { // switch to the recorded loops once loaded
+    const loop = (buf) => { const s2 = actx.createBufferSource(), g2 = actx.createGain(); s2.buffer = buf; s2.loop = true; g2.gain.value = 0; s2.connect(g2); g2.connect(sfxBus); s2.start(); return { s: s2, g: g2 }; };
+    ROLL.rec = { roll: loop(SFXB.rollloop[0]), grind: loop(SFXB.grindloop[0]) }; ROLL.g.gain.value = 0; ROLL.gg.gain.value = 0;
+  }
+  if (ROLL.rec) {
+    const R2 = ROLL.rec, gr = (SFX_META.rollloop && SFX_META.rollloop.g) || 1, gg = (SFX_META.grindloop && SFX_META.grindloop.g) || 1;
+    R2.roll.g.gain.setTargetAtTime(grounded && !grinding ? Math.min(0.55, speed * 0.045) * gr : 0, now, 0.06);
+    R2.roll.s.playbackRate.setTargetAtTime(0.55 + Math.min(1.1, speed * 0.06), now, 0.08);
+    R2.grind.g.gain.setTargetAtTime(grinding ? 0.5 * gg : 0, now, 0.03);
+    R2.grind.s.playbackRate.setTargetAtTime(0.8 + Math.min(0.5, speed * 0.03), now, 0.08);
+    return;
+  }
   ROLL.g.gain.setTargetAtTime(grounded ? Math.min(0.16, speed * 0.013) : 0, now, 0.05);
   ROLL.f.frequency.setTargetAtTime(250 + speed * 70, now, 0.05);
   ROLL.gg.gain.setTargetAtTime(grinding ? 0.12 : 0, now, 0.03);
@@ -136,7 +172,40 @@ function rollUpdate(speed, grounded, grinding) {
 const MUSIC = { on: false, step: 0, next: 0, bpm: 160, layer: 0, intensity: 0, menu: true, timer: null, root: 0 };
 const BASS = [0, 0, 3, 0, 5, 0, 3, 7, 0, 0, 3, 0, 10, 7, 5, 3];
 const KICK = [1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0], SNARE = [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1];
+// ── the soundtrack: four songs, the title track first, then shuffled; one continuous radio across menus and matches.
+// Falls back to the synthesised breakbeat below if the files can't be played.
+const TRACKS = [{ f: 'grind-house', t: 'Grind House' }, { f: 'skate4life', t: 'Skate4Life' }, { f: 'friday-nights', t: 'Friday Nights' }, { f: 'longboardin', t: "LongBoardin'" }];
+const ST = { el: null, order: [], i: -1, failed: false };
+function shuffled(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function nextTrack() {
+  ST.i++;
+  if (ST.i >= ST.order.length) { const last = ST.order[ST.order.length - 1]; do { ST.order = shuffled([0, 1, 2, 3]); } while (ST.order[0] === last); ST.i = 0; }
+  const tr = TRACKS[ST.order[ST.i]];
+  ST.el.src = `/assets/audio/music/${tr.f}.mp3`;
+  ST.el.play().then(() => nowPlaying(tr.t)).catch(() => {});
+}
+function nowPlaying(title) {
+  let el = document.getElementById('np');
+  if (!el) { el = document.createElement('div'); el.id = 'np'; document.body.appendChild(el); }
+  el.innerHTML = `<small>NOW PLAYING</small><b>♪ ${esc(title)}</b>`; el.classList.remove('on'); void el.offsetWidth; el.classList.add('on');
+}
 function musicStart() {
+  if (!actx) return;
+  if (!ST.failed) {
+    if (!ST.el) {
+      try {
+        ST.el = new Audio(); ST.el.preload = 'auto';
+        const node = actx.createMediaElementSource(ST.el); node.connect(musicBus); musicBus.gain.value = 0.55;
+        ST.el.addEventListener('ended', nextTrack);
+        ST.el.addEventListener('error', () => { if (ST.failed) return; ST.failed = true; musicBus.gain.value = 0.42; synthStart(); });
+        ST.order = [0, ...shuffled([1, 2, 3])]; nextTrack();
+      } catch { ST.failed = true; synthStart(); }
+    } else if (ST.el.paused) ST.el.play().catch(() => {});
+    return;
+  }
+  synthStart();
+}
+function synthStart() {
   if (!actx || MUSIC.on) return; MUSIC.on = true; MUSIC.next = actx.currentTime + 0.05;
   MUSIC.timer = setInterval(musicTick, 25);
 }

@@ -23,7 +23,7 @@ const LOOKS = 8
 const log = (...a) => console.log(new Date().toISOString(), ...a)
 
 // ───────────── static web client
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.webmanifest': 'application/manifest+json' }
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.webmanifest': 'application/manifest+json', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav' }
 function serveStatic(req, res) {
   const url = new URL(req.url, 'http://x')
   if (url.pathname.startsWith('/api/')) return api(url, res)
@@ -40,11 +40,22 @@ function serveStatic(req, res) {
   const headers = {
     'content-type': TYPES[ext] || 'application/octet-stream',
     // files with a content hash in their name can be cached for a long time; everything else must revalidate
-    'cache-control': /-[A-Za-z0-9_-]{8}\.(js|css)$/.test(file) ? 'public, max-age=31536000, immutable' : 'no-cache',
+    'cache-control': /-[A-Za-z0-9_-]{8}\.(js|css)$/.test(file) ? 'public, max-age=31536000, immutable' : /\.(mp3|ogg|wav)$/.test(file) ? 'public, max-age=86400' : 'no-cache',
     'x-content-type-options': 'nosniff', 'referrer-policy': 'strict-origin-when-cross-origin',
     'permissions-policy': 'camera=(), microphone=(), geolocation=()', vary: 'accept-encoding',
   }
   if (gz) { headers['content-encoding'] = 'gzip'; res.writeHead(200, headers); return res.end(gzipped(file)) }
+  // byte ranges (audio streaming / seeking: Safari won't play media without them)
+  const size = fs.statSync(file).size, rg = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '')
+  headers['accept-ranges'] = 'bytes'
+  if (rg && (rg[1] || rg[2])) {
+    let start = rg[1] ? +rg[1] : size - +rg[2], end = rg[1] && rg[2] ? Math.min(+rg[2], size - 1) : size - 1
+    if (start < 0) start = 0
+    if (start >= size || start > end) { res.writeHead(416, { 'content-range': `bytes */${size}` }); return res.end() }
+    headers['content-range'] = `bytes ${start}-${end}/${size}`; headers['content-length'] = end - start + 1
+    res.writeHead(206, headers); return fs.createReadStream(file, { start, end }).pipe(res)
+  }
+  headers['content-length'] = size
   res.writeHead(200, headers)
   fs.createReadStream(file).pipe(res)
 }
