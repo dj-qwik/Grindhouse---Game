@@ -95,6 +95,8 @@ function settingsCard() {
         <label class="label">Controller dead zone <b>${SETTINGS.deadzone.toFixed(2)}</b><input type="range" min="0.05" max="0.4" step="0.01" value="${SETTINGS.deadzone}" data-set="deadzone" style="width:100%"></label>
         <label class="label">Field of view <b>${Math.round(SETTINGS.fov * 100)}%</b><input type="range" min="0.85" max="1.2" step="0.01" value="${SETTINGS.fov}" data-set="fov" style="width:100%"></label>
         <label class="label">Volume <b>${Math.round(AUDIO.vol * 100)}%</b><input type="range" min="0" max="1" step="0.05" value="${AUDIO.vol}" data-set="vol" style="width:100%"></label>
+        <label class="label">Music <b>${Math.round(SETTINGS.musicVol * 100)}%</b><input type="range" min="0" max="1" step="0.05" value="${SETTINGS.musicVol}" data-set="musicVol" style="width:100%"></label>
+        <label class="check"><input type="checkbox" data-set="classicSfx" ${SETTINGS.classicSfx ? 'checked' : ''}><span>Classic (synth) sound effects</span></label>
         <label class="check"><input type="checkbox" data-set="invertY" ${SETTINGS.invertY ? 'checked' : ''}><span>Invert camera Y</span></label>
         <label class="check"><input type="checkbox" data-set="vibrate" ${SETTINGS.vibrate ? 'checked' : ''}><span>Controller vibration</span></label>
         <div style="display:grid;gap:6px"><span class="label">Graphics</span><div class="seg">${['auto', 'high', 'low'].map((q) => `<button class="${SETTINGS.quality === q ? 'sel' : ''}" data-quality="${q}">${q}</button>`).join('')}</div></div>
@@ -405,9 +407,10 @@ $('#ov').addEventListener('click', (e) => {
 $('#ov').addEventListener('input', (e) => {
   const k = e.target.dataset && e.target.dataset.set; if (!k) return;
   if (e.target.type === 'checkbox') SETTINGS[k] = e.target.checked; else SETTINGS[k] = +e.target.value;
+  if (k === 'musicVol' && musicBus) musicBus.gain.value = (ST.failed ? 0.42 : 0.55) * SETTINGS.musicVol;
   if (k === 'vol') { AUDIO.vol = SETTINGS.vol; store.set('gh_vol', AUDIO.vol); if (master && !AUDIO.muted) master.gain.value = AUDIO.vol; }
   saveSettings();
-  const lab = e.target.closest('label'); if (lab && e.target.type === 'range') { const b = lab.querySelector('b'); if (b) b.textContent = k === 'fov' || k === 'vol' ? Math.round(+e.target.value * 100) + '%' : (+e.target.value).toFixed(2); }
+  const lab = e.target.closest('label'); if (lab && e.target.type === 'range') { const b = lab.querySelector('b'); if (b) b.textContent = k === 'fov' || k === 'vol' || k === 'musicVol' ? Math.round(+e.target.value * 100) + '%' : (+e.target.value).toFixed(2); }
 });
 $('#hud').addEventListener('click', (e) => {
   const t = e.target.closest('button,#lockHint'); if (!t) return;

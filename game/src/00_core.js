@@ -27,7 +27,7 @@ function audioInit() {
     const comp = actx.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4;
     master.connect(comp); comp.connect(actx.destination);
     sfxBus = actx.createGain(); sfxBus.gain.value = 0.9; sfxBus.connect(master);
-    musicBus = actx.createGain(); musicBus.gain.value = 0.42; musicBus.connect(master);
+    musicBus = actx.createGain(); musicBus.gain.value = 0.42 * SETTINGS.musicVol; musicBus.connect(master);
     noiseBuf = actx.createBuffer(1, actx.sampleRate * 2, actx.sampleRate);
     const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     distCurve = new Float32Array(1024); for (let i = 0; i < 1024; i++) { const x = i / 512 - 1; distCurve[i] = Math.tanh(x * 3.2); }
@@ -49,6 +49,7 @@ async function loadSfx() {
   } catch {}
 }
 function playBuf(name, dest, vol, rate = 1) {
+  if (SETTINGS.classicSfx) return false;
   const list = SFXB[name]; if (!list || !list.length) return false;
   const buf = list[Math.floor(Math.random() * list.length)]; if (!buf) return false;
   const src = actx.createBufferSource(), g = actx.createGain();
@@ -156,7 +157,8 @@ function rollUpdate(speed, grounded, grinding) {
     const loop = (buf) => { const s2 = actx.createBufferSource(), g2 = actx.createGain(); s2.buffer = buf; s2.loop = true; g2.gain.value = 0; s2.connect(g2); g2.connect(sfxBus); s2.start(); return { s: s2, g: g2 }; };
     ROLL.rec = { roll: loop(SFXB.rollloop[0]), grind: loop(SFXB.grindloop[0]) }; ROLL.g.gain.value = 0; ROLL.gg.gain.value = 0;
   }
-  if (ROLL.rec) {
+  if (ROLL.rec && SETTINGS.classicSfx) { ROLL.rec.roll.g.gain.value = 0; ROLL.rec.grind.g.gain.value = 0; }
+  if (ROLL.rec && !SETTINGS.classicSfx) {
     const R2 = ROLL.rec, gr = (SFX_META.rollloop && SFX_META.rollloop.g) || 1, gg = (SFX_META.grindloop && SFX_META.grindloop.g) || 1;
     R2.roll.g.gain.setTargetAtTime(grounded && !grinding ? Math.min(0.55, speed * 0.045) * gr : 0, now, 0.06);
     R2.roll.s.playbackRate.setTargetAtTime(0.55 + Math.min(1.1, speed * 0.06), now, 0.08);
@@ -195,9 +197,9 @@ function musicStart() {
     if (!ST.el) {
       try {
         ST.el = new Audio(); ST.el.preload = 'auto';
-        const node = actx.createMediaElementSource(ST.el); node.connect(musicBus); musicBus.gain.value = 0.55;
+        const node = actx.createMediaElementSource(ST.el); node.connect(musicBus); musicBus.gain.value = 0.55 * SETTINGS.musicVol;
         ST.el.addEventListener('ended', nextTrack);
-        ST.el.addEventListener('error', () => { if (ST.failed) return; ST.failed = true; musicBus.gain.value = 0.42; synthStart(); });
+        ST.el.addEventListener('error', () => { if (ST.failed) return; ST.failed = true; musicBus.gain.value = 0.42 * SETTINGS.musicVol; synthStart(); });
         ST.order = [0, ...shuffled([1, 2, 3])]; nextTrack();
       } catch { ST.failed = true; synthStart(); }
     } else if (ST.el.paused) ST.el.play().catch(() => {});

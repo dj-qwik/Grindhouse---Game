@@ -8,7 +8,7 @@ const ACTIONS = [
   ['trick', 'Trick in the air · Slam at full Adrenaline', 'Mouse2'], ['throw', 'Throw / shove', 'KeyE'],
   ['boost', 'Boost push (optional)', 'ShiftLeft'],
 ];
-const SETTINGS = Object.assign({ sens: 1, invertY: false, deadzone: 0.18, vibrate: true, altToggle: false, fov: 1, quality: 'auto', vol: 0.8 }, store.json('gh_settings', {}));
+const SETTINGS = Object.assign({ sens: 1, invertY: false, deadzone: 0.18, vibrate: true, altToggle: false, fov: 1, quality: 'auto', vol: 0.8, musicVol: 0.8, classicSfx: false }, store.json('gh_settings', {}));
 const KEYMAP = Object.assign(Object.fromEntries(ACTIONS.map(([a, , k]) => [a, k])), store.json('gh_keys2', {}));
 const ALT_KEYS = { brake: 'KeyC' };
 function saveSettings() { store.set('gh_settings', JSON.stringify(SETTINGS)); store.set('gh_keys2', JSON.stringify(KEYMAP)); }
