@@ -188,7 +188,12 @@ function stepAir(s, W, dt, btn, press, mag, dX, dZ, ctl) {
     const diff = angDiff(yawOf(dX, dZ), s.yaw); s.yaw = angWrap(s.yaw + clamp(diff, -MOVE.airTurn * dt, MOVE.airTurn * dt));
   }
   // vert air: hang straight over the wall you launched from and come back down onto it (no drifting into the flat)
-  if (s.vertX || s.vertZ) { const o = s.vx * s.vertX + s.vz * s.vertZ, want = -0.35; s.vx += (want - o) * s.vertX; s.vz += (want - o) * s.vertZ; }
+  if (s.vertX || s.vertZ) { const o = s.vx * s.vertX + s.vz * s.vertZ, want = -0.35; s.vx += (want - o) * s.vertX; s.vz += (want - o) * s.vertZ;
+    // ...and don't drift off the side of a narrow ramp while you hang there
+    const P = s.lipP;
+    if (P) { const lx = s.vertZ, lz = -s.vertX, lat = (s.x - P.cx) * lx + (s.z - P.cz) * lz, vl = s.vx * lx + s.vz * lz, half = Math.max(0.1, P.w / 2 - 0.35);
+      if ((lat > half && vl > 0) || (lat < -half && vl < 0)) { s.vx -= vl * lx; s.vz -= vl * lz; } }
+  }
   capSpeed(s);
   // tricks: trick + direction in the air. One at a time; land before it finishes and you bail.
   if ((press & BTN.trick) && !s.trick && s.airT > 0.05 && s.adren < 100) {

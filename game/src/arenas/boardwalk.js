@@ -53,10 +53,11 @@ ARENAS.boardwalk = {
     fallHz(w1, 0, 31, 16, 14, M);
     deck(0, -31, 16, 14, M);
     fence(-8, -24, -8, -38, M); fence(8, -24, 8, -38, M); fence(-8, -38, 8, -38, M);
-    const arcL = box(-5.5, -30, 5, 12, AR, { y0: M, mat: 'neon' }), arcR = box(5.5, -30, 5, 12, AR, { y0: M, mat: 'neon' });
+    // arcades stand clear of the side railings: a lane runs round each one, so the alley end loops instead of dead-ending
+    const arcL = box(-4.4, -30, 2.8, 12, AR, { y0: M, mat: 'neon' }), arcR = box(4.4, -30, 2.8, 12, AR, { y0: M, mat: 'neon' });
     A.prims.push(arcL, arcR);
     const roofRails = [];
-    for (const sx of [-1, 1]) for (const ex of [3, 8]) { const r = mkRail([[sx * ex, AR, -24], [sx * ex, AR, -36]], { kind: 'ledge' }); A.rails.push(r); roofRails.push(r); }
+    for (const sx of [-1, 1]) for (const ex of [3, 5.8]) { const r = mkRail([[sx * ex, AR, -24], [sx * ex, AR, -36]], { kind: 'ledge' }); A.rails.push(r); roofRails.push(r); }
     fallHz(w1, 0, -31, 16, 14, M);
     for (const sx of [-1, 1]) {
       deck(sx * 32, 0, 16, 30, B, 'plank');
@@ -98,7 +99,7 @@ ARENAS.boardwalk = {
       fallHz(wEW, sx * 18, 0, 12, 24, M);
     }
     // roller-coaster rails: carnival platform → out over the east/west ring → arcade roof
-    for (const sx of [-1, 1]) A.rails.push(mkRail([[sx * 8, ph, 22.5], [sx * 15, ph + 1, 15], [sx * 19, ph + 1.6, 0], [sx * 15, AR + 1, -15], [sx * 8, AR, -24.5]], { kind: 'rail' }));
+    for (const sx of [-1, 1]) A.rails.push(mkRail([[sx * 8, ph, 22.5], [sx * 15, ph + 1, 15], [sx * 19, ph + 1.6, 0], [sx * 15, AR + 1, -15], [sx * 4.4, AR, -24.5]], { kind: 'rail' }));
     end(wEW);
     begin();
     for (const sz of [-1, 1]) {
@@ -112,15 +113,15 @@ ARENAS.boardwalk = {
       A.rails.push(mkRail([[sx * 8, ph, 15], [sx * 8, ph, 23]], { kind: 'ledge' }));
     }
     // arcade roof ramps off the south ring
-    A.prims.push(slope(5.5, -20, 5, 8, M, AR, { yaw: PI, mat: 'wood', wr: false }), slope(-5.5, -20, 5, 8, M, AR, { yaw: PI, mat: 'wood', wr: false }));
+    A.prims.push(slope(4.4, -20, 2.8, 8, M, AR, { yaw: PI, mat: 'wood', wr: false }), slope(-4.4, -20, 2.8, 8, M, AR, { yaw: PI, mat: 'wood', wr: false }));
     end(wNS);
 
     // ── hazard descriptors
     A.hz = [
       { kind: 'grinder', x: 0, y: M, z: 31, r: 3.2, on: false, warn: 0 },
       { kind: 'sweep', x: tram.cx, y: M, z: tram.cz, w: 2.6, d: 2.2, yaw: 0, on: false, warn: 0 },
-      { kind: 'electric', x: -5.5, y: AR, z: -30, w: 5, d: 12, yaw: 0, on: false, warn: 0 },
-      { kind: 'electric', x: 5.5, y: AR, z: -30, w: 5, d: 12, yaw: 0, on: false, warn: 0 },
+      { kind: 'electric', x: -4.4, y: AR, z: -30, w: 2.8, d: 12, yaw: 0, on: false, warn: 0 },
+      { kind: 'electric', x: 4.4, y: AR, z: -30, w: 2.8, d: 12, yaw: 0, on: false, warn: 0 },
     ];
     for (const g of A.segs) for (const h of g.hz) A.hz.push(h);
     A.M = M; A.AR = AR;

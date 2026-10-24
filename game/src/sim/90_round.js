@@ -18,6 +18,7 @@ function createRound(cfg, rng = {}) {
   const variant = Math.floor(RNG() * (A.variants || 1));
   const W = A.build(variant);
   W.variant = variant;
+  addTurnarounds(W, cfg.key); // little quarter pipes at the ends of dead-end lanes (tools/turnarounds.mjs)
   const sk = cfg.players.map((p) => Object.assign(makeSkater(p.i, p.look ?? (p.i % SKATERS.length), p.name || SKATERS[(p.look ?? p.i) % SKATERS.length].name), {
     human: !!p.human, skill: p.skill ?? 0.8,
   }));

@@ -320,6 +320,7 @@ function railMesh(d) {
 // dry-run an arena's update() over the whole match on a scratch copy to find the parts that ever change
 function dynamicParts(R) {
   const A = R.def, W2 = A.build(R.W.variant || 0), prims = new Set(), rails = new Set();
+  W2.variant = R.W.variant || 0; if (SIM0.addTurnarounds) SIM0.addTurnarounds(W2, R.key);
   const snapP = (p) => [p.cx, p.cz, p.top, p.y0, p.w, p.d, p.yaw, p.h0, p.h1, p.gone, p.warn || 0, p.vx, p.vz].join(),
     snapR = (r) => [r.gone, r.live].join();
   const p0 = W2.prims.map(snapP), r0 = W2.rails.map(snapR);

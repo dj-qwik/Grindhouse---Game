@@ -79,7 +79,7 @@ ARENAS.mall = {
     return A;
   },
   update(R, dt) {
-    if (R.t >= 36 && R.W.hpPrims && !R.W.hpPrims[0].gone) { for (const p of R.W.hpPrims) p.gone = true; for (const r of R.W.hpRails) r.gone = true; } // security folds the halfpipe away before the shutters roll
+    if (R.t >= 36 && R.W.hpPrims && !R.W.hpPrims[0].gone) { for (const p of R.W.hpPrims) p.gone = true; for (const r of R.W.hpRails) r.gone = true; for (const p of R.W.prims) if (p.turn && Math.max(Math.abs(p.cx), Math.abs(p.cz)) > 20) p.gone = true; } // security folds the halfpipe (and the outer turnaround ramps) away before the shutters roll
     const A = R.W, t = R.t;
     // fountain jets: alternate diagonal pairs; warn, then erupt
     const jp = t < 40 ? 5 : 3.5, jw = t < 40 ? 1.5 : 1, jt = t - 14, ph = jt - Math.floor(jt / jp) * jp, pair = Math.floor(jt / jp) % 2;

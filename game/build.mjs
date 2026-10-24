@@ -19,7 +19,7 @@ const S = path.join(ROOT, 'src')
 let ARENA_FILES = ['spillway', 'rooftop', 'mall', 'junkyard', 'boardwalk', 'overpass', 'factory', 'schoolyard']
 ARENA_FILES = ARENA_FILES.filter((k) => fs.existsSync(path.join(S, 'arenas', k + '.js')))
 const FX_NAMES = ['sfx', 'vfx', 'announce', 'shake', 'hitMark', 'pickupFx', 'killFeed', 'deuceFx', 'slipFx']
-const SIM_FILES = ['01_base.js', '10_world.js', '20_skater.js', '30_combat.js', '50_bots.js']
+const SIM_FILES = ['01_base.js', '10_world.js', '12_turnarounds.js', '20_skater.js', '30_combat.js', '50_bots.js']
 const args = process.argv.slice(2)
 if (args.includes('--only')) { const keep = args[args.indexOf('--only') + 1].split(','); ARENA_FILES = ARENA_FILES.filter((k) => keep.includes(k)) }
 
@@ -45,7 +45,7 @@ ${FX_NAMES.map((n) => `  const ${n} = FX.${n} || NOOP;`).join('\n')}
   let RNG = makeRng(env.seed == null ? 1 : env.seed);
 ${body.join('\n')}
   return { ARENAS, createRound, packInput, unpackInput, validInput, IDLE_INPUT, WEAPONS, SKATERS, TRICKS, MODE, BTN, DT, MAX_TICKS, WARMUP,
-    makeSkater, stepSkater, groundAt, zoneAt, primTop, surfL, raycast, botInput, LOOT,
+    makeSkater, stepSkater, groundAt, zoneAt, addTurnarounds, primTop, surfL, raycast, botInput, LOOT,
     reseed(s) { RNG = makeRng(s); }, random: () => RNG() };
 }
 `
