@@ -229,8 +229,9 @@ function buildArena(R) {
   // ground: the arena floor, an outer apron to the horizon, or water / a long drop
   const half = W.half;
   if (W.floor) {
-    const fl = new T.Mesh(new T.PlaneGeometry(half * 2, half * 2), toon(look.ground || '#B7B0A0', { map: GFX.tex.concrete, normalMap: GFX.nrm.concrete, normalScale: new T.Vector2(0.8, 0.8), aoMap: GFX.macro, aoMapIntensity: 0.75 }));
-    fl.geometry.attributes.uv.array.forEach((v, k, a) => { a[k] = v * half * 2 / 4.2; });
+    // runs 2 m under the perimeter walls, so their rounded bases never show a sliver of the apron below (shimmer)
+    const FS = half * 2 + 4, fl = new T.Mesh(new T.PlaneGeometry(FS, FS), toon(look.ground || '#B7B0A0', { map: GFX.tex.concrete, normalMap: GFX.nrm.concrete, normalScale: new T.Vector2(0.8, 0.8), aoMap: GFX.macro, aoMapIntensity: 0.75 }));
+    fl.geometry.attributes.uv.array.forEach((v, k, a) => { a[k] = v * FS / 4.2; });
     fl.rotation.x = -Math.PI / 2; fl.receiveShadow = true; root.add(fl);
     addFloorMarks(root, W, look);
   }
@@ -349,9 +350,9 @@ function addFloorMarks(root, W, look) {
   const T = THREE, mat = new T.MeshBasicMaterial({ color: '#E8DDBD', transparent: true, opacity: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
   for (let k = 0; k < 6; k++) {
     const m = new T.Mesh(new T.PlaneGeometry(0.25, 6 + k * 2), mat); m.rotation.x = -Math.PI / 2; m.rotation.z = k * 1.1;
-    m.position.set(Math.sin(k * 2.1) * W.half * 0.6, 0.01, Math.cos(k * 1.7) * W.half * 0.6); m.renderOrder = 1; root.add(m);
+    m.position.set(Math.sin(k * 2.1) * W.half * 0.6, 0.016, Math.cos(k * 1.7) * W.half * 0.6); m.renderOrder = 1; root.add(m);
   }
-  const ring = new T.Mesh(new T.RingGeometry(5.6, 6, 48), mat); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.012; ring.renderOrder = 1; root.add(ring);
+  const ring = new T.Mesh(new T.RingGeometry(5.6, 6, 48), mat); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.017; ring.renderOrder = 1; root.add(ring);
 }
 function addSkyline(root, W, look) {
   const T = THREE, rnd = mulberry(W.prims.length * 97 + W.half);

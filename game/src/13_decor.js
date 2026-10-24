@@ -97,7 +97,7 @@ function placeDecor(root, R) {
     root.add(im, ol);
   }
   // ground decals: manholes, drains, oil, skid marks, painted arrows, stencils, sticker bombs on walls
-  const D = DECOR.decals, flat = (tex, x, y, z, s, rot, op = 1) => { const m = new T.Mesh(new T.PlaneGeometry(s, s), new T.MeshBasicMaterial({ map: tex, transparent: true, opacity: op, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 })); m.rotation.set(-Math.PI / 2, 0, rot); m.position.set(x, y + 0.015, z); m.renderOrder = 2; root.add(m); };
+  const D = DECOR.decals, flat = (tex, x, y, z, s, rot, op = 1) => { const m = new T.Mesh(new T.PlaneGeometry(s, s), new T.MeshBasicMaterial({ map: tex, transparent: true, opacity: op, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 })); m.rotation.set(-Math.PI / 2, 0, rot); m.position.set(x, y + 0.024, z); m.renderOrder = 2; root.add(m); };
   const kinds = [['manhole', 1.3, 1], ['drain', 1.2, 1], ['oil', 2.6, 1], ['oil', 2, 1], ['skid', 4, 0.9], ['skid', 3.5, 0.9], ['arrow', 2.2, 0.85], ['stencil', 3, 0.9]];
   for (let k = 0; k < 26; k++) {
     const x = (rnd() - 0.5) * W.half * 1.8, z = (rnd() - 0.5) * W.half * 1.8, gy = SIM0.groundAt(W, x, z, 30);

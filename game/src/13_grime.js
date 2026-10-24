@@ -48,7 +48,7 @@ function grimeQuad(tex, op, m4, w, h, ru = 1, wall = false) {
   const T = THREE, c = [[-w / 2, -h / 2, 0, 0], [w / 2, -h / 2, ru, 0], [w / 2, h / 2, ru, 1], [-w / 2, h / 2, 0, 1]].map(([x, y, u, v]) => [new T.Vector3(x, y, 0).applyMatrix4(m4), u, v]);
   for (const k of [0, 1, 2, 0, 2, 3]) { const [p, u, v] = c[k]; B.pos.push(p.x, p.y, p.z); B.uv.push(u, v); }
 }
-function grimeFlat(root, tex, x, y, z, w, h, rot, op = 1, ru = 1) { grimeQuad(tex, op, new THREE.Matrix4().compose(new THREE.Vector3(x, y + 0.012, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, rot)), new THREE.Vector3(1, 1, 1)), w, h, ru); }
+function grimeFlat(root, tex, x, y, z, w, h, rot, op = 1, ru = 1) { grimeQuad(tex, op, new THREE.Matrix4().compose(new THREE.Vector3(x, y + 0.02, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, rot)), new THREE.Vector3(1, 1, 1)), w, h, ru); }
 function grimeWall(root, tex, x, y, z, w, h, yaw, op = 1, tilt = 0) { grimeQuad(tex, op, new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, tilt)), new THREE.Vector3(1, 1, 1)), w, h, 1, true); }
 function flushGrime(root) {
   const T = THREE;
