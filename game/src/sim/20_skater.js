@@ -463,7 +463,7 @@ function edgeNear(s, W, reach = 1.25, lo = -0.7, hi = 1.3) {
       const cx = g.a[0] + (g.b[0] - g.a[0]) * t, cy = g.a[1] + (g.b[1] - g.a[1]) * t, cz = g.a[2] + (g.b[2] - g.a[2]) * t;
       const d = hyp(s.x - cx, s.z - cz), dy = cy - s.y;
       const score = d + Math.max(0, dy) * 0.25;
-      if (d < reach && dy > lo && dy < hi && score < bd) { bd = score; best = [r, k, t, cx, cy, cz]; }
+      if (d < reach && dy > lo && dy < hi && score < bd && (d < 0.4 || lineOfSight(W, s.x, s.y + 0.6, s.z, cx, cy + 0.25, cz))) { bd = score; best = [r, k, t, cx, cy, cz]; } // never through a wall or floor
     }
   }
   return best;

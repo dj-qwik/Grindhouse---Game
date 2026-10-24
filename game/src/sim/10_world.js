@@ -214,6 +214,17 @@ function mkArena(o) { return Object.assign({ prims: [], rails: [], holes: [], fl
 function addEdges(W) {
   W.edges = [];
   const near = (x, y, z) => { for (const r of W.rails) for (const g of r.seg) { const t = segT(x, y, z, g.a[0], g.a[1], g.a[2], g.b[0], g.b[1], g.b[2]); const cx = g.a[0] + (g.b[0] - g.a[0]) * t, cy = g.a[1] + (g.b[1] - g.a[1]) * t, cz = g.a[2] + (g.b[2] - g.a[2]) * t; if (hyp(x - cx, z - cz) < 0.6 && Math.abs(y - cy) < 0.6) return true; } return false; };
+  // an edge point is buried when some other surface sits above it there (stacked decks, a ramp over a box…)
+  const buried = (x, z, y) => groundAt(W, x, z, 200) > y + 0.08;
+  // the uncovered stretches of a straight edge a→b (y0→y1), each at least 1 m long
+  const openRuns = (a, b, y0, y1) => {
+    const L = hyp(b[0] - a[0], b[1] - a[1]), n = Math.max(2, Math.ceil(L / 0.4)), runs = []; let st = -1;
+    for (let i = 0; i <= n; i++) {
+      const u = i / n, x = a[0] + (b[0] - a[0]) * u, z = a[1] + (b[1] - a[1]) * u, y = y0 + (y1 - y0) * u, open = !buried(x, z, y);
+      if (open && st < 0) st = u; if ((!open || i === n) && st >= 0) { const e = open ? u : (i - 1) / n; if ((e - st) * L >= 1) runs.push([st, e]); st = -1; }
+    }
+    return runs;
+  };
   const tag = (r, p) => { r.prim = p; r.px = p.cx; r.pz = p.cz; r.ptop = p.top; return r; };
   for (const p of W.prims) {
     if (p.gone || p.hz || p.w < 0.5 || p.d < 0.5) continue;
@@ -226,7 +237,14 @@ function addEdges(W) {
       for (let k = 0; k < 4; k++) {
         const a = C[k], b = C[(k + 1) % 4], mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
         let nx = mx - p.cx, nz = mz - p.cz; const nl = hyp(nx, nz) || 1; nx /= nl; nz /= nl;
-        ok.push(groundAt(W, mx + nx * 0.4, mz + nz * 0.4, top + 0.1) <= top - 0.2 && !near(mx, top, mz));
+        const edge = groundAt(W, mx + nx * 0.4, mz + nz * 0.4, top + 0.1) <= top - 0.2 && !near(mx, top, mz);
+        const runs = edge ? openRuns(a, b, top, top) : [];
+        const whole = runs.length === 1 && runs[0][0] === 0 && runs[0][1] === 1;
+        ok.push(whole);
+        if (edge && !whole) for (const [u0, u1] of runs) { // partly covered: just the open stretches, unchained
+          const P = (u) => [a[0] + (b[0] - a[0]) * u, top, a[1] + (b[1] - a[1]) * u];
+          W.edges.push(tag(mkRail([P(u0), P(u1)], { kind: 'edge' }), p));
+        }
       }
       // chain neighbouring edges so a grind carries round the corners (all four → a closed loop round the box)
       if (ok.every(Boolean)) { W.edges.push(tag(mkRail([...C, C[0]].map((c) => [c[0], top, c[1]]), { kind: 'edge', closed: true }), p)); continue; }
@@ -244,7 +262,10 @@ function addEdges(W) {
         const lx = sx * (p.w / 2 - 0.04), a = offs(p.cx, p.cz, p.yaw, lx, -p.d / 2 + 0.05), b = offs(p.cx, p.cz, p.yaw, lx, p.d / 2 - 0.05);
         const [ox, oz] = offs(p.cx, p.cz, p.yaw, lx + sx * 0.4, 0); const midH = (p.h0 + p.h1) / 2;
         if (groundAt(W, ox, oz, midH + 0.1) > midH - 0.2 || near(...offs(p.cx, p.cz, p.yaw, lx, 0).flatMap((v, k) => k ? [midH, v] : [v]))) continue;
-        W.edges.push(tag(mkRail([[a[0], p.h0 + 0.02, a[1]], [b[0], p.h1 + 0.02, b[1]]], { kind: 'edge' }), p));
+        for (const [u0, u1] of openRuns(a, b, p.h0, p.h1)) {
+          const P = (u) => [a[0] + (b[0] - a[0]) * u, p.h0 + (p.h1 - p.h0) * u + 0.02, a[1] + (b[1] - a[1]) * u];
+          W.edges.push(tag(mkRail([P(u0), P(u1)], { kind: 'edge' }), p));
+        }
       }
     }
   }
