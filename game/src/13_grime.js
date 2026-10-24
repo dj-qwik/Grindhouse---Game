@@ -55,7 +55,7 @@ function flushGrime(root) {
   for (const B of GRIME_BATCH.values()) {
     const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(B.pos, 3)); g.setAttribute('uv', new T.Float32BufferAttribute(B.uv, 2));
     const off = B.wall ? -3 : -2, m = new T.Mesh(g, new T.MeshBasicMaterial({ map: B.tex, transparent: true, opacity: B.op, depthWrite: false, polygonOffset: true, polygonOffsetFactor: off, polygonOffsetUnits: off }));
-    m.frustumCulled = false; root.add(m);
+    m.frustumCulled = false; m.renderOrder = B.wall ? (B.op >= 1 ? 4 : 3) : 3; root.add(m); // fixed layer order: overlapping decals never swap places as the camera moves
   }
   GRIME_BATCH = null;
 }

@@ -97,7 +97,7 @@ function placeDecor(root, R) {
     root.add(im, ol);
   }
   // ground decals: manholes, drains, oil, skid marks, painted arrows, stencils, sticker bombs on walls
-  const D = DECOR.decals, flat = (tex, x, y, z, s, rot, op = 1) => { const m = new T.Mesh(new T.PlaneGeometry(s, s), new T.MeshBasicMaterial({ map: tex, transparent: true, opacity: op, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 })); m.rotation.set(-Math.PI / 2, 0, rot); m.position.set(x, y + 0.015, z); root.add(m); };
+  const D = DECOR.decals, flat = (tex, x, y, z, s, rot, op = 1) => { const m = new T.Mesh(new T.PlaneGeometry(s, s), new T.MeshBasicMaterial({ map: tex, transparent: true, opacity: op, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 })); m.rotation.set(-Math.PI / 2, 0, rot); m.position.set(x, y + 0.015, z); m.renderOrder = 2; root.add(m); };
   const kinds = [['manhole', 1.3, 1], ['drain', 1.2, 1], ['oil', 2.6, 1], ['oil', 2, 1], ['skid', 4, 0.9], ['skid', 3.5, 0.9], ['arrow', 2.2, 0.85], ['stencil', 3, 0.9]];
   for (let k = 0; k < 26; k++) {
     const x = (rnd() - 0.5) * W.half * 1.8, z = (rnd() - 0.5) * W.half * 1.8, gy = SIM0.groundAt(W, x, z, 30);
@@ -109,10 +109,10 @@ function placeDecor(root, R) {
     const x = (rnd() - 0.5) * W.half * 1.6, z = (rnd() - 0.5) * W.half * 1.6, gy = SIM0.groundAt(W, x, z, 1);
     if (gy !== 0 || !clear(x, z)) continue;
     const m = new T.Mesh(new T.CircleGeometry(1, 24), new T.MeshPhongMaterial({ color: new T.Color(R.def.look?.sky || '#8FD3F4').multiplyScalar(0.8), specular: 0xffffff, shininess: 160, transparent: true, opacity: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 }));
-    m.rotation.x = -Math.PI / 2; m.scale.set(1.2 + rnd() * 1.6, 0.6 + rnd() * 0.9, 1); m.rotation.z = rnd() * 3; m.position.set(x, 0.02, z); root.add(m);
+    m.rotation.x = -Math.PI / 2; m.scale.set(1.2 + rnd() * 1.6, 0.6 + rnd() * 0.9, 1); m.rotation.z = rnd() * 3; m.position.set(x, 0.02, z); m.renderOrder = 2; root.add(m);
   }
   // sticker bombs on tall walls
-  for (const p of statics) { if (rnd() > 0.25 || p.w < 2 || p.top - p.y0 < 2) continue; const m = new T.Mesh(new T.PlaneGeometry(1.4, 1.4), new T.MeshBasicMaterial({ map: D.sticker, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 })); const c = Math.cos(p.yaw), sn = Math.sin(p.yaw), lx = (rnd() - 0.5) * (p.w - 1.5), lz = p.d / 2 + 0.02; m.position.set(p.cx + lx * c + lz * sn, p.y0 + 1.1 + rnd() * 0.6, p.cz - lx * sn + lz * c); m.rotation.y = p.yaw; root.add(m); }
+  for (const p of statics) { if (rnd() > 0.25 || p.w < 2 || p.top - p.y0 < 2) continue; const m = new T.Mesh(new T.PlaneGeometry(1.4, 1.4), new T.MeshBasicMaterial({ map: D.sticker, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 })); const c = Math.cos(p.yaw), sn = Math.sin(p.yaw), lx = (rnd() - 0.5) * (p.w - 1.5), lz = p.d / 2 + 0.02; m.position.set(p.cx + lx * c + lz * sn, p.y0 + 1.1 + rnd() * 0.6, p.cz - lx * sn + lz * c); m.rotation.y = p.yaw; m.renderOrder = 5; root.add(m); }
 }
 // toon clouds + sun disc around the sky dome (they follow the camera with the dome)
 function addSky(root, look) {
@@ -171,7 +171,7 @@ function addMurals(root, W) {
     if (nxw * -wx + nzw * -wz < 0) continue;
     m.position.set(wx, p.y0 + Math.min(h, mh + 0.4) / 2 + 0.25, wz);
     m.rotation.y = p.yaw + (alongX ? (side === 0 ? 0 : Math.PI) : (side === 2 ? Math.PI / 2 : -Math.PI / 2));
-    root.add(m); n++;
+    m.renderOrder = 1; root.add(m); n++;
   }
 }
 // painted skate ledges: low boxes get a coloured top trim (classic skatepark curb paint)
@@ -180,8 +180,9 @@ function addLedgeTrim(root, W, dyn) {
   W.prims.forEach((p, i) => {
     if (dyn.has(i) || p.type !== 'box' || p.top - p.y0 > 1.3 || p.top < 0.25 || p.w * p.d > 60) return;
     const col = cols[i % cols.length];
-    for (const [lx, lz, w, d] of [[0, p.d / 2, p.w + 0.04, 0.14], [0, -p.d / 2, p.w + 0.04, 0.14], [p.w / 2, 0, 0.14, p.d + 0.04], [-p.w / 2, 0, 0.14, p.d + 0.04]])
-      parts.push({ g: new T.BoxGeometry(w, 0.07, d), c: col, m: new T.Matrix4().compose(new T.Vector3(p.cx + lx * Math.cos(p.yaw) + lz * Math.sin(p.yaw), p.top + 0.02, p.cz - lx * Math.sin(p.yaw) + lz * Math.cos(p.yaw)), new T.Quaternion().setFromAxisAngle(new T.Vector3(0, 1, 0), p.yaw), new T.Vector3(1, 1, 1)) });
+    const tw = 0.14 + (i % 4) * 0.008, te = 0.04 + (i % 4) * 0.008, ty = (i % 4) * 0.003; // neighbouring trims differ by a few mm: no shared planes
+    for (const [lx, lz, w, d] of [[0, p.d / 2, p.w + te, tw], [0, -p.d / 2, p.w + te, tw], [p.w / 2, 0, tw, p.d + te], [-p.w / 2, 0, tw, p.d + te]])
+      parts.push({ g: new T.BoxGeometry(w, 0.07, d), c: col, m: new T.Matrix4().compose(new T.Vector3(p.cx + lx * Math.cos(p.yaw) + lz * Math.sin(p.yaw), p.top + 0.02 + ty, p.cz - lx * Math.sin(p.yaw) + lz * Math.cos(p.yaw)), new T.Quaternion().setFromAxisAngle(new T.Vector3(0, 1, 0), p.yaw), new T.Vector3(1, 1, 1)) });
   });
   if (!parts.length) return;
   const m = new T.Mesh(mergeParts(parts), toon('#ffffff', { vertexColors: true })); m.receiveShadow = true; root.add(m);

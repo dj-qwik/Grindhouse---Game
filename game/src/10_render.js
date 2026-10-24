@@ -28,7 +28,7 @@ function initRender() {
   GFX.hemi = new T.HemisphereLight(0xcfe8ff, 0x9a8a70, 1.5); GFX.scene.add(GFX.hemi);
   GFX.sun = new T.DirectionalLight(0xfff1d6, 2.4); GFX.sun.castShadow = true;
   GFX.sun.shadow.mapSize.set(2048, 2048); const sc = GFX.sun.shadow.camera; sc.left = sc.bottom = -45; sc.right = sc.top = 45; sc.near = 1; sc.far = 220;
-  GFX.sun.shadow.bias = -0.0006; GFX.sun.shadow.normalBias = 0.02;
+  GFX.sun.shadow.bias = -0.0005; GFX.sun.shadow.normalBias = 0.045; // enough to keep shadow acne (striping) off grazing-lit floors
   GFX.scene.add(GFX.sun, GFX.sun.target);
   // the toon ramp: three hard tones
   const ramp = new Uint8Array([128, 196, 255, 255]);
@@ -155,6 +155,8 @@ const ROUND_UV = {
     return [a, b, c, d].map((i) => new THREE.Vector2(v[i * 3 + 2] / S, (horiz ? v[i * 3] : v[i * 3 + 1]) / S));
   },
 };
+// moving pieces are drawn a hair smaller on every side, so they never share a plane with what they slide past
+function dynGeoPrim(p, k) { return SIM0.insetPrim ? SIM0.insetPrim(p, GFX.vis && GFX.vis.get(p), k) : p; }
 function roundGeo(p) {
   const T = THREE, y0 = p.y0, prof = [];
   if (p.type === 'box') prof.push([-p.d / 2, p.top], [p.d / 2, p.top]);
@@ -241,22 +243,25 @@ function buildArena(R) {
   const dyn = dynamicParts(R);
   // primitives
   const groups = new Map(); // material → { pos: [], uv: [], edges: [] }
-  W.prims.forEach((p, k) => {
-    const mat = matFor(p, look, k);
+  // pieces built flush with each other get pulled apart by a centimetre or so, so no two visible faces share a plane
+  const vis = SIM0.visualInsets ? SIM0.visualInsets(W, W.prims.filter((p) => !p.gone)) : new Map(); GFX.vis = vis;
+  W.prims.forEach((p0, k) => {
+    const mat = matFor(p0, look, k);
     if (!dyn.prims.has(k)) {
+      const p = SIM0.insetPrim ? SIM0.insetPrim(p0, vis.get(p0)) : p0;
       const g = roundGeo(p), m4 = new T.Matrix4().compose(new T.Vector3(p.cx, 0, p.cz), new T.Quaternion().setFromAxisAngle(new T.Vector3(0, 1, 0), p.yaw), new T.Vector3(1, 1, 1));
       g.applyMatrix4(m4);
       let G = groups.get(mat); if (!G) { G = { pos: [], uv: [], col: [], nrm: [] }; groups.set(mat, G); }
       G.pos.push(...g.attributes.position.array); G.uv.push(...g.attributes.uv.array); G.col.push(...g.attributes.color.array); G.nrm.push(...g.attributes.normal.array); g.dispose();
       return;
     }
-    const g = roundGeo(p);
+    const p = p0, g = roundGeo(dynGeoPrim(p, k));
     const m = new T.Mesh(g, mat); m.castShadow = true; m.receiveShadow = true;
     m.position.set(p.cx, 0, p.cz); m.rotation.y = p.yaw;
     const edges = new T.Mesh(hullGeo(g), outlineMat(0.035)); edges.renderOrder = -1;
     m.add(edges);
     root.add(m);
-    GFX.built.prims.push({ p, m, edges, top: p.top, y0: p.y0, w: p.w, d: p.d, h0: p.h0, h1: p.h1, gone: false, warnMat: null, baseMat: m.material });
+    GFX.built.prims.push({ p, k, m, edges, top: p.top, y0: p.y0, w: p.w, d: p.d, h0: p.h0, h1: p.h1, gone: false, warnMat: null, baseMat: m.material });
   });
   const allLines = [];
   for (const [mat, G] of groups) {
@@ -307,7 +312,7 @@ function buildArena(R) {
   GFX.decals = []; GFX.decalI = 0;
   for (let k = 0; k < 30; k++) {
     const d = new T.Mesh(new T.PlaneGeometry(1, 1), new T.MeshBasicMaterial({ map: GFX.tex.blood, color: 0xd1102a, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }));
-    d.rotation.x = -Math.PI / 2; d.visible = false; d.userData.shared = true; root.add(d); GFX.decals.push(d);
+    d.rotation.x = -Math.PI / 2; d.visible = false; d.renderOrder = 6; d.userData.shared = true; root.add(d); GFX.decals.push(d);
   }
 }
 function railMesh(d) {
@@ -344,9 +349,9 @@ function addFloorMarks(root, W, look) {
   const T = THREE, mat = new T.MeshBasicMaterial({ color: '#E8DDBD', transparent: true, opacity: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
   for (let k = 0; k < 6; k++) {
     const m = new T.Mesh(new T.PlaneGeometry(0.25, 6 + k * 2), mat); m.rotation.x = -Math.PI / 2; m.rotation.z = k * 1.1;
-    m.position.set(Math.sin(k * 2.1) * W.half * 0.6, 0.01, Math.cos(k * 1.7) * W.half * 0.6); root.add(m);
+    m.position.set(Math.sin(k * 2.1) * W.half * 0.6, 0.01, Math.cos(k * 1.7) * W.half * 0.6); m.renderOrder = 1; root.add(m);
   }
-  const ring = new T.Mesh(new T.RingGeometry(5.6, 6, 48), mat); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.012; root.add(ring);
+  const ring = new T.Mesh(new T.RingGeometry(5.6, 6, 48), mat); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.012; ring.renderOrder = 1; root.add(ring);
 }
 function addSkyline(root, W, look) {
   const T = THREE, rnd = mulberry(W.prims.length * 97 + W.half);
@@ -376,7 +381,7 @@ function addGraffiti(root, W) {
     const c = Math.cos(p.yaw), sn = Math.sin(p.yaw);
     m.position.set(p.cx + lx * c + lz * sn, p.y0 + Math.min(p.top - p.y0, s) / 2 + 0.2, p.cz - lx * sn + lz * c);
     m.rotation.y = p.yaw + (alongX ? (side === 0 ? 0 : Math.PI) : (side === 2 ? Math.PI / 2 : -Math.PI / 2));
-    root.add(m); n++;
+    m.renderOrder = 2; root.add(m); n++;
   }
 }
 function mulberry(a) { return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
@@ -391,11 +396,11 @@ function syncArena(R, t, dt) {
     const p = e.p;
     if (p.gone) { if (!e.gone) { e.gone = true; e.m.visible = false; fxBurst(p.cx, primTop(p), p.cz, 'debris', 24, p.mat); } continue; }
     if (e.gone) { e.gone = false; e.m.visible = true; }
-    if (p.top !== e.top || p.y0 !== e.y0 || p.w !== e.w || p.d !== e.d || p.h0 !== e.h0 || p.h1 !== e.h1) { e.m.geometry.dispose(); e.m.geometry = roundGeo(p); e.edges.geometry.dispose(); e.edges.geometry = hullGeo(e.m.geometry); e.top = p.top; e.y0 = p.y0; e.w = p.w; e.d = p.d; e.h0 = p.h0; e.h1 = p.h1; }
+    if (p.top !== e.top || p.y0 !== e.y0 || p.w !== e.w || p.d !== e.d || p.h0 !== e.h0 || p.h1 !== e.h1) { e.m.geometry.dispose(); e.m.geometry = roundGeo(dynGeoPrim(p, e.k)); e.edges.geometry.dispose(); e.edges.geometry = hullGeo(e.m.geometry); e.top = p.top; e.y0 = p.y0; e.w = p.w; e.d = p.d; e.h0 = p.h0; e.h1 = p.h1; }
     e.m.position.x = p.cx; e.m.position.z = p.cz; e.m.rotation.y = p.yaw;
     const w = p.warn || 0;
     // shutters / sweepers parked flush with the floor: hide them (they z-fight with it), except a lifted flash while telegraphing
-    const tucked = p.type === 'box' && (p.top - p.y0 < 0.03 || (p.mat === 'gate' && p.top <= 0.02));
+    const tucked = p.type === 'box' && (p.top - p.y0 < 0.03 || ((p.mat === 'gate' || R.W.floor) && p.top <= 0.02));
     e.m.visible = !tucked || w > 0; e.m.position.y = tucked ? 0.03 : 0;
     if (w > 0) {
       const on = Math.floor(GFX.clock * (6 + w * 6)) % 2 === 0;
@@ -444,7 +449,7 @@ function syncHazards(R, B, dt) {
       } else if (h.kind === 'fall') {
         const pl = new T.Mesh(new T.PlaneGeometry(h.w || 4, h.d || 4), new T.MeshBasicMaterial({ map: GFX.tex.hazard, color: '#FF5C69', transparent: true, opacity: 0.6, depthWrite: false })); pl.rotation.x = -Math.PI / 2; pl.position.y = 0.06; o.add(pl); o.userData.glow = pl;
       }
-      GFX.arena.add(o); B.hz.set(h, o);
+      o.traverse((c) => { if (c.material && c.material.transparent) c.renderOrder = 7; }); GFX.arena.add(o); B.hz.set(h, o);
     }
     o.position.set(h.x || 0, h.y || 0, h.z || 0); o.rotation.y = h.yaw || 0;
     const warn = h.warn || 0, on = !!h.on;

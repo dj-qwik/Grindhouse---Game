@@ -288,7 +288,7 @@ function poseRig(r, s, dt, view) {
   if (r.pack) { r.pack.position.copy(chest).add(V3().set(-0.22 * Math.cos(twist * 0.6), -0.12, 0.22 * Math.sin(twist * 0.6))); r.pack.rotation.set(0, twist * 0.6, -0.12 - c * 0.3); }
   const mad = s.atk || r.hitT > 0 ? 0.35 : 0; r.brows[0].rotation.x = mad; r.brows[1].rotation.x = -mad;
   // contact shadow
-  if (!r.blob) { r.blob = new THREE.Mesh(new THREE.CircleGeometry(0.55, 20), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 })); r.blob.rotation.x = -Math.PI / 2; GFX.scene.add(r.blob); }
+  if (!r.blob) { r.blob = new THREE.Mesh(new THREE.CircleGeometry(0.55, 20), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 })); r.blob.rotation.x = -Math.PI / 2; r.blob.renderOrder = 6; GFX.scene.add(r.blob); }
   const W = ROUND && ROUND.W, gy = W ? SIM0.groundAt(W, view.x, view.z, view.y + 0.3) : view.y;
   const hgt = gy > -1e8 ? view.y - gy : 99; r.blob.visible = hgt < 6 && (s.alive || hgt < 1);
   if (r.blob.visible) { r.blob.position.set(view.x, gy + 0.025, view.z); const k = Math.max(0.35, 1 - hgt * 0.15); r.blob.scale.setScalar(k); r.blob.material.opacity = 0.38 * k; }
