@@ -146,6 +146,52 @@ function prismGeo(p) {
   g.computeVertexNormals();
   return g;
 }
+// Softened blocks: the same prism, but every edge gets a small 3-step bevel (≈5–8 cm) so nothing reads as a raw
+// cube. Built as an ExtrudeGeometry of the inset cross-section; the collision shape is unchanged (visual only).
+const ROUND_UV = {
+  generateTopUV(g, v, a, b, c) { const S = 4.2; return [a, b, c].map((i) => new THREE.Vector2(v[i * 3] / S, v[i * 3 + 1] / S)); },
+  generateSideWallUV(g, v, a, b, c, d) {
+    const S = 4.2, horiz = Math.abs(v[a * 3] - v[b * 3]) + Math.abs(v[c * 3] - v[d * 3]) > Math.abs(v[a * 3 + 1] - v[b * 3 + 1]) + Math.abs(v[c * 3 + 1] - v[d * 3 + 1]);
+    return [a, b, c, d].map((i) => new THREE.Vector2(v[i * 3 + 2] / S, (horiz ? v[i * 3] : v[i * 3 + 1]) / S));
+  },
+};
+function roundGeo(p) {
+  const T = THREE, y0 = p.y0, prof = [];
+  if (p.type === 'box') prof.push([-p.d / 2, p.top], [p.d / 2, p.top]);
+  else if (p.type === 'slope') prof.push([-p.d / 2, p.h0], [p.d / 2, p.h1]);
+  else { const n = 14; for (let k = 0; k <= n; k++) { const z = -p.d / 2 + p.d * k / n; prof.push([z, surfLocal(p, z)]); } }
+  const lo = Math.min(...prof.map((q) => q[1])), hi = Math.max(...prof.map((q) => q[1]));
+  const r = Math.min(0.07, 0.18 * Math.min(p.w, p.d, Math.max(0.05, hi - y0)));
+  if (r < 0.015 || p.mat === 'fence' || p.mat === 'glass') return prismGeo(p);
+  // inset cross-section in (u = -z, v = y), counter-clockwise; tops come down by r, ends and base come in by r
+  const zf = -p.d / 2 + r, zb = p.d / 2 - r, base = y0 + r, pts = [];
+  pts.push([zf, base], [zb, base]);
+  for (let k = prof.length - 1; k >= 0; k--) { const z = Math.max(zf, Math.min(zb, prof[k][0])), y = Math.max(base + 0.005, prof[k][1] - r); pts.push([z, y]); }
+  const shape = new T.Shape(); pts.forEach(([z, y], k) => (k ? shape.lineTo(-z, y) : shape.moveTo(-z, y)));
+  const depth = Math.max(0.01, p.w - 2 * r);
+  const g = new T.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelThickness: r, bevelSize: r, bevelSegments: 3, curveSegments: 2, UVGenerator: ROUND_UV });
+  g.translate(0, 0, -depth / 2); g.rotateY(Math.PI / 2);
+  const ng = g.index ? g.toNonIndexed() : g; if (ng !== g) g.dispose();
+  ng.computeVertexNormals();
+  // grime: walls darken toward their base and just under their top edge (same as the sharp version)
+  const P = ng.attributes.position, N = ng.attributes.normal, col = new Float32Array(P.count * 3);
+  for (let i = 0; i < P.count; i++) {
+    const y = P.getY(i), side = Math.abs(N.getY(i)) < 0.7;
+    const k = side ? (0.58 + 0.42 * Math.max(0, Math.min(1, (y - y0) / 1.6))) * (0.86 + 0.14 * Math.max(0, Math.min(1, (hi - y) / 0.35))) : 1;
+    col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = k;
+  }
+  ng.setAttribute('color', new T.BufferAttribute(col, 3));
+  return ng;
+}
+// outline hull: a copy of the geometry with fully smoothed normals (so the inked shell has no cracks at bevels)
+function hullGeo(g) {
+  const T = THREE, P = g.attributes.position, acc = new Map(), key = (i) => `${Math.round(P.getX(i) * 500)},${Math.round(P.getY(i) * 500)},${Math.round(P.getZ(i) * 500)}`;
+  const N = g.attributes.normal;
+  for (let i = 0; i < P.count; i++) { const k = key(i), a = acc.get(k) || [0, 0, 0]; a[0] += N.getX(i); a[1] += N.getY(i); a[2] += N.getZ(i); acc.set(k, a); }
+  const n = new Float32Array(P.count * 3);
+  for (let i = 0; i < P.count; i++) { const a = acc.get(key(i)), l = Math.hypot(a[0], a[1], a[2]) || 1; n[i * 3] = a[0] / l; n[i * 3 + 1] = a[1] / l; n[i * 3 + 2] = a[2] / l; }
+  const h = new T.BufferGeometry(); h.setAttribute('position', P); h.setAttribute('normal', new T.BufferAttribute(n, 3)); return h;
+}
 function surfLocal(p, lz) { const u = Math.max(0, Math.min(p.d, lz + p.d / 2)); if (p.type === 'slope') return p.h0 + (p.h1 - p.h0) * u / p.d; if (p.type === 'box') return p.top; return p.base + p.R - Math.sqrt(p.R * p.R - u * u); }
 function matFor(p, look, idx) {
   let col = MAT_COLORS[p.mat] || MAT_COLORS.concrete;
@@ -198,28 +244,29 @@ function buildArena(R) {
   W.prims.forEach((p, k) => {
     const mat = matFor(p, look, k);
     if (!dyn.prims.has(k)) {
-      const g = prismGeo(p), m4 = new T.Matrix4().compose(new T.Vector3(p.cx, 0, p.cz), new T.Quaternion().setFromAxisAngle(new T.Vector3(0, 1, 0), p.yaw), new T.Vector3(1, 1, 1));
+      const g = roundGeo(p), m4 = new T.Matrix4().compose(new T.Vector3(p.cx, 0, p.cz), new T.Quaternion().setFromAxisAngle(new T.Vector3(0, 1, 0), p.yaw), new T.Vector3(1, 1, 1));
       g.applyMatrix4(m4);
-      let G = groups.get(mat); if (!G) { G = { pos: [], uv: [], col: [], edges: [] }; groups.set(mat, G); }
-      G.pos.push(...g.attributes.position.array); G.uv.push(...g.attributes.uv.array); G.col.push(...g.attributes.color.array);
-      const eg = new T.EdgesGeometry(g, 28); G.edges.push(...eg.attributes.position.array); eg.dispose(); g.dispose();
+      let G = groups.get(mat); if (!G) { G = { pos: [], uv: [], col: [], nrm: [] }; groups.set(mat, G); }
+      G.pos.push(...g.attributes.position.array); G.uv.push(...g.attributes.uv.array); G.col.push(...g.attributes.color.array); G.nrm.push(...g.attributes.normal.array); g.dispose();
       return;
     }
-    const g = prismGeo(p);
+    const g = roundGeo(p);
     const m = new T.Mesh(g, mat); m.castShadow = true; m.receiveShadow = true;
     m.position.set(p.cx, 0, p.cz); m.rotation.y = p.yaw;
-    const edges = new T.LineSegments(new T.EdgesGeometry(g, 28), new T.LineBasicMaterial({ color: INK, transparent: true, opacity: 0.8 }));
+    const edges = new T.Mesh(hullGeo(g), outlineMat(0.035)); edges.renderOrder = -1;
     m.add(edges);
     root.add(m);
     GFX.built.prims.push({ p, m, edges, top: p.top, y0: p.y0, w: p.w, d: p.d, h0: p.h0, h1: p.h1, gone: false, warnMat: null, baseMat: m.material });
   });
-  const edgeMat = new T.LineBasicMaterial({ color: INK, transparent: true, opacity: 0.8 }), allEdges = [];
+  const allLines = [];
   for (const [mat, G] of groups) {
-    const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(G.pos, 3)); g.setAttribute('uv', new T.Float32BufferAttribute(G.uv, 2)); g.setAttribute('color', new T.Float32BufferAttribute(G.col, 3)); g.computeVertexNormals();
+    const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(G.pos, 3)); g.setAttribute('uv', new T.Float32BufferAttribute(G.uv, 2)); g.setAttribute('color', new T.Float32BufferAttribute(G.col, 3)); g.setAttribute('normal', new T.Float32BufferAttribute(G.nrm, 3));
     const m = new T.Mesh(g, mat); m.castShadow = true; m.receiveShadow = true; root.add(m);
-    allEdges.push(...G.edges);
+    const hull = new T.Mesh(hullGeo(g), outlineMat(0.035)); hull.renderOrder = -1; root.add(hull); // inked silhouette
+    const eg = new T.EdgesGeometry(g, 24); G.lines = eg.attributes.position.array; eg.dispose(); allLines.push(G.lines); // ink along the softened edges
   }
-  if (allEdges.length) { const eg = new T.BufferGeometry(); eg.setAttribute('position', new T.Float32BufferAttribute(allEdges, 3)); root.add(new T.LineSegments(eg, edgeMat)); }
+  { let n = 0; for (const a of allLines) n += a.length; const buf = new Float32Array(n); let o = 0; for (const a of allLines) { buf.set(a, o); o += a.length; }
+    if (n) { const eg = new T.BufferGeometry(); eg.setAttribute('position', new T.BufferAttribute(buf, 3)); root.add(new T.LineSegments(eg, new T.LineBasicMaterial({ color: INK, transparent: true, opacity: 0.55 }))); } }
   // rails: static ones merged into one mesh + one outline; live/collapsing ones stay separate
   const railStatic = { pos: [], norm: [] };
   const addCyl = (into, a, b, rad, seg) => {
@@ -247,7 +294,7 @@ function buildArena(R) {
   });
   if (railStatic.pos.length) root.add(railMesh(railStatic));
   addGraffiti(root, W);
-  placeDecor(root, R); addSky(root, look); addMurals(root, W); addLedgeTrim(root, W, dyn.prims);
+  placeDecor(root, R); addSky(root, look); addMurals(root, W); addLedgeTrim(root, W, dyn.prims); placeGrime(root, R);
   // zone wall
   const zw = new T.Mesh(new T.CylinderGeometry(1, 1, 60, 64, 1, true), new T.ShaderMaterial({
     transparent: true, depthWrite: false, side: T.DoubleSide,
@@ -338,11 +385,12 @@ const WARN_MAT = {};
 function syncArena(R, t, dt) {
   const B = GFX.built; if (!B || B.R !== R) return;
   GFX.clock += dt;
+  updateGrime(R, dt);
   for (const e of B.prims) {
     const p = e.p;
     if (p.gone) { if (!e.gone) { e.gone = true; e.m.visible = false; fxBurst(p.cx, primTop(p), p.cz, 'debris', 24, p.mat); } continue; }
     if (e.gone) { e.gone = false; e.m.visible = true; }
-    if (p.top !== e.top || p.y0 !== e.y0 || p.w !== e.w || p.d !== e.d || p.h0 !== e.h0 || p.h1 !== e.h1) { e.m.geometry.dispose(); e.m.geometry = prismGeo(p); e.edges.geometry.dispose(); e.edges.geometry = new THREE.EdgesGeometry(e.m.geometry, 28); e.top = p.top; e.y0 = p.y0; e.w = p.w; e.d = p.d; e.h0 = p.h0; e.h1 = p.h1; }
+    if (p.top !== e.top || p.y0 !== e.y0 || p.w !== e.w || p.d !== e.d || p.h0 !== e.h0 || p.h1 !== e.h1) { e.m.geometry.dispose(); e.m.geometry = roundGeo(p); e.edges.geometry.dispose(); e.edges.geometry = hullGeo(e.m.geometry); e.top = p.top; e.y0 = p.y0; e.w = p.w; e.d = p.d; e.h0 = p.h0; e.h1 = p.h1; }
     e.m.position.x = p.cx; e.m.position.z = p.cz; e.m.rotation.y = p.yaw;
     const w = p.warn || 0;
     if (w > 0) {
