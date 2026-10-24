@@ -217,10 +217,13 @@ function addEdges(W) {
   // an edge point is buried when some other surface sits above it there (stacked decks, a ramp over a box…)
   const buried = (x, z, y) => groundAt(W, x, z, 200) > y + 0.08;
   // the uncovered stretches of a straight edge a→b (y0→y1), each at least 1 m long
-  const openRuns = (a, b, y0, y1) => {
+  // a real edge drops away steeply: 0.3 m out the surface must be ≥ 0.5 m lower (steeper than ~60°) or gone.
+  // Gentle bank tops, ramp transitions and flush neighbours are corners you can't physically grind.
+  const drops = (x, z, y, nx, nz) => groundAt(W, x + nx * 0.3, z + nz * 0.3, y + 0.1) < y - 0.5;
+  const openRuns = (a, b, y0, y1, nx = 0, nz = 0) => {
     const L = hyp(b[0] - a[0], b[1] - a[1]), n = Math.max(2, Math.ceil(L / 0.4)), runs = []; let st = -1;
     for (let i = 0; i <= n; i++) {
-      const u = i / n, x = a[0] + (b[0] - a[0]) * u, z = a[1] + (b[1] - a[1]) * u, y = y0 + (y1 - y0) * u, open = !buried(x, z, y);
+      const u = i / n, x = a[0] + (b[0] - a[0]) * u, z = a[1] + (b[1] - a[1]) * u, y = y0 + (y1 - y0) * u, open = !buried(x, z, y) && (!nx && !nz || drops(x, z, y, nx, nz));
       if (open && st < 0) st = u; if ((!open || i === n) && st >= 0) { const e = open ? u : (i - 1) / n; if ((e - st) * L >= 1) runs.push([st, e]); st = -1; }
     }
     return runs;
@@ -237,8 +240,10 @@ function addEdges(W) {
       for (let k = 0; k < 4; k++) {
         const a = C[k], b = C[(k + 1) % 4], mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
         let nx = mx - p.cx, nz = mz - p.cz; const nl = hyp(nx, nz) || 1; nx /= nl; nz /= nl;
-        const edge = groundAt(W, mx + nx * 0.4, mz + nz * 0.4, top + 0.1) <= top - 0.2 && !near(mx, top, mz);
-        const runs = edge ? openRuns(a, b, top, top) : [];
+        // outward normal of this side (perpendicular to it, away from the box)
+        let ex = b[1] - a[1], ez = -(b[0] - a[0]); const el = hyp(ex, ez) || 1; ex /= el; ez /= el; if (ex * nx + ez * nz < 0) { ex = -ex; ez = -ez; }
+        const edge = !near(mx, top, mz);
+        const runs = edge ? openRuns(a, b, top, top, ex, ez) : [];
         const whole = runs.length === 1 && runs[0][0] === 0 && runs[0][1] === 1;
         ok.push(whole);
         if (edge && !whole) for (const [u0, u1] of runs) { // partly covered: just the open stretches, unchained
@@ -257,12 +262,13 @@ function addEdges(W) {
       }
     } else if (p.type === 'slope') {
       // ramp sides: the sloped side edges of kickers / funbox ramps / stair sets
-      const hi = Math.max(p.h0, p.h1); if (hi < 0.5 || hi > 9 || p.d < 1.5) continue;
+      const hi = Math.max(p.h0, p.h1); if (hi < 0.5 || hi > 9 || p.d < 1.5 || Math.abs(p.h1 - p.h0) / p.d > 0.6) continue; // no grinding 45° lines
       for (const sx of [-1, 1]) {
         const lx = sx * (p.w / 2 - 0.04), a = offs(p.cx, p.cz, p.yaw, lx, -p.d / 2 + 0.05), b = offs(p.cx, p.cz, p.yaw, lx, p.d / 2 - 0.05);
         const [ox, oz] = offs(p.cx, p.cz, p.yaw, lx + sx * 0.4, 0); const midH = (p.h0 + p.h1) / 2;
         if (groundAt(W, ox, oz, midH + 0.1) > midH - 0.2 || near(...offs(p.cx, p.cz, p.yaw, lx, 0).flatMap((v, k) => k ? [midH, v] : [v]))) continue;
-        for (const [u0, u1] of openRuns(a, b, p.h0, p.h1)) {
+        const [sxw, szw] = [sx * p.c, -sx * p.s]; // the side's outward direction in world space
+        for (const [u0, u1] of openRuns(a, b, p.h0, p.h1, sxw, szw)) {
           const P = (u) => [a[0] + (b[0] - a[0]) * u, p.h0 + (p.h1 - p.h0) * u + 0.02, a[1] + (b[1] - a[1]) * u];
           W.edges.push(tag(mkRail([P(u0), P(u1)], { kind: 'edge' }), p));
         }
