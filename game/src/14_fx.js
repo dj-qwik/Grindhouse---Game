@@ -14,6 +14,17 @@ function initFx() {
     const l = new T.Line(g, new T.LineBasicMaterial({ color: 0xfff1b0, transparent: true })); l.visible = false; l.frustumCulled = false; GFX.scene.add(l);
     PFX.tracers.push({ l, t: 0, life: 0.08 });
   }
+  // visible bullets: a hot core + additive glow streak that flies from the muzzle to the hit at ~85 m/s
+  PFX.slugs = [];
+  // comic tracer: bright core, dark inverted-hull outline (reads on light concrete), soft additive glow
+  const coreG = new T.CylinderGeometry(0.07, 0.07, 1, 8, 1, false), shellG = new T.CylinderGeometry(0.11, 0.11, 1.06, 8, 1, false), glowG = new T.CylinderGeometry(0.24, 0.1, 1, 10, 1, true);
+  for (let k = 0; k < 90; k++) {
+    const g = new T.Group(), core = new T.Mesh(coreG, new T.MeshBasicMaterial({ color: 0xfff6c8 }));
+    const shell = new T.Mesh(shellG, new T.MeshBasicMaterial({ color: 0x22292b, side: T.BackSide }));
+    const glow = new T.Mesh(glowG, new T.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.4, depthWrite: false, blending: T.AdditiveBlending }));
+    g.add(glow, shell, core); g.visible = false; for (const m of [g, core, shell, glow]) m.frustumCulled = false; GFX.scene.add(g);
+    PFX.slugs.push({ g, core, glow, t: 0, dur: 0.1, a: new T.Vector3(), b: new T.Vector3(), len: 1.4, hit: false });
+  }
 }
 function part(x, y, z, o = {}) {
   let p = PFX.pool.find((q) => !q.m.visible); if (!p) { p = PFX.live.shift(); if (!p) return; }
@@ -32,6 +43,13 @@ function stepFx(dt) {
     if (p.g > 0 && p.y < 0.02 && GFX.built && GFX.built.R.W.floor) { p.y = 0.02; p.vy = 0; p.vx *= 0.5; p.vz *= 0.5; }
     p.m.position.set(p.x, p.y, p.z); p.m.scale.setScalar(p.s0 + (p.s1 - p.s0) * u);
     if (p.fade) p.m.material.opacity = 1 - u * u;
+  }
+  for (const sl of PFX.slugs) if (sl.g.visible) {
+    sl.t += dt; const u = Math.min(1, sl.t / sl.dur), dist = sl.a.distanceTo(sl.b);
+    const head = u * dist, tail = Math.max(0, head - sl.len), mid = (head + tail) / 2, L = Math.max(0.05, head - tail);
+    const dir = _fxv.subVectors(sl.b, sl.a).normalize();
+    sl.g.position.copy(sl.a).addScaledVector(dir, mid); sl.g.scale.set(1, L, 1); sl.g.quaternion.setFromUnitVectors(_fxUp, dir);
+    if (u >= 1) { sl.g.visible = false; for (let k = 0; k < (sl.hit ? 5 : 3); k++) fxSpark(sl.b.x, sl.b.y, sl.b.z, sl.hit ? 0xff9b8a : 0xffe2a8); part(sl.b.x, sl.b.y, sl.b.z, { life: 0.12, s0: 0.35, s1: 0.1, col: 0xfff1b0, add: true, tex: GFX.tex.spark }); }
   }
   for (const tr of PFX.tracers) if (tr.l.visible) { tr.t += dt; tr.l.material.opacity = 1 - tr.t / tr.life; if (tr.t >= tr.life) tr.l.visible = false; }
   PFX.shake *= Math.exp(-dt * 9); PFX.flash *= Math.exp(-dt * 10);
@@ -53,21 +71,34 @@ function decal(x, z, size, col = 0xd1102a, rot = Math.random() * 6) {
   if (gy < -1e8) return;
   d.position.set(x, gy + 0.03, z); d.scale.set(size, size, 1); d.rotation.z = rot; d.material.color.set(col); d.visible = true;
 }
-function tracer(ax, ay, az, bx, by, bz, col) {
+const _fxv = new THREE.Vector3(), _fxUp = new THREE.Vector3(0, 1, 0), _fxWhite = new THREE.Color(0xffffff);
+function tracer(ax, ay, az, bx, by, bz, col, hit) {
+  const sl = PFX.slugs && (PFX.slugs.find((q) => !q.g.visible) || PFX.slugs[0]);
+  if (sl) {
+    sl.a.set(ax, ay, az); sl.b.set(bx, by, bz); sl.t = 0; sl.hit = !!hit;
+    const d = sl.a.distanceTo(sl.b); sl.dur = Math.max(0.045, Math.min(0.35, d / 85)); sl.len = Math.min(2.6, 0.9 + d * 0.07);
+    sl.glow.material.color.set(col); sl.core.material.color.set(col).lerp(_fxWhite, 0.55); sl.g.visible = true;
+  }
   const tr = PFX.tracers.find((q) => !q.l.visible) || PFX.tracers[0];
   const a = tr.l.geometry.attributes.position.array; a[0] = ax; a[1] = ay; a[2] = az; a[3] = bx; a[4] = by; a[5] = bz; tr.l.geometry.attributes.position.needsUpdate = true;
   tr.l.material.color.set(col); tr.t = 0; tr.l.visible = true;
 }
-const TRACER_COL = { pistol: 0xfff1b0, nailgun: 0xd8e2e6, smg: 0xb4e64a, revolver: 0xfff1b0, sawoff: 0xffb36b };
+const TRACER_COL = { pistol: 0xffd27a, nailgun: 0x9fd8ff, smg: 0xb4e64a, revolver: 0xffb347, sawoff: 0xff8a4a };
 
 // ── what the simulation calls
 const FEED = [];
 function installFxHooks() {
   FXHOOK.sfx = (name, x, y, z, vol) => playSfx(name, x, y, z, vol);
-  FXHOOK.vfx = (kind, x, y, z, a, b, c, d) => {
+  FXHOOK.vfx = (kind, x, y, z, a, b, c, d, e) => {
     if (!GFX.built) return;
     switch (kind) {
-      case 'tracer': tracer(x, y, z, a, b, c, TRACER_COL[d] || 0xffffff); part(x, y, z, { life: 0.06, s0: 0.5, s1: 0.2, col: 0xfff1b0, add: true, tex: GFX.tex.spark }); break;
+      case 'tracer': { // e = hit flag (arg 8)
+        const col = TRACER_COL[d] || 0xffd27a;
+        tracer(x, y, z, a, b, c, col, e);
+        part(x, y, z, { life: 0.07, s0: 0.95, s1: 0.3, col: 0xfff1b0, add: true, tex: GFX.tex.spark }); // muzzle flash
+        part(x, y, z, { life: 0.1, s0: 0.5, s1: 0.9, col, add: true, tex: GFX.tex.spark });
+        break;
+      }
       case 'spark': for (let k = 0; k < 5; k++) fxSpark(x, y, z); break;
       case 'impact': for (let k = 0; k < 8; k++) fxSpark(x, y, z); break;
       case 'land': fxBurst(x, y, z, 'dust', a > 0.8 ? 10 : 5); break;

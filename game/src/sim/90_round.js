@@ -111,6 +111,7 @@ function createRound(cfg, rng = {}) {
         for (const s of sk) { s.fx0 = s.x; s.fz0 = s.z; s.fy0 = s.y; s.fm0 = s.mode; }
         for (const s of sk) stepSkater(s, W, R.t);
         separateSkaters(sk);
+        for (const s of sk) unstick(s, W);
         for (const s of sk) { keepOnMap(s); netCatch(s); } // open air, water and pits are walled off
         for (const s of sk) if ((s.press & BTN.trick) && s.adren >= 100 && s.mode !== MODE.DOWN) signature(R, s); // Super Slam: bowls everyone over, no damage sticks
         stepDeuces(R);
@@ -123,6 +124,7 @@ function createRound(cfg, rng = {}) {
       if (A.update) A.update(R, DT);
       for (const s of sk) stepSkater(s, W, R.t);
       separateSkaters(sk);
+      for (const s of sk) unstick(s, W);
       for (const s of sk) stepCombat(R, s);
       stepProjectiles(R);
       stepPickups(R);

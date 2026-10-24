@@ -482,3 +482,22 @@ function grabEdge(s, W, reach, lo, hi) {
   sk_sfx(s, 'pop', 0.6); sk_sfx(s, r.live ? 'zap' : 'grind', 0.8);
   return true;
 }
+
+// safety net: feet buried inside a ramp/box/deck (a squeeze between two solids, a bad landing on a steep face,
+// a rail that runs through something) → step up onto the surface if it's close, else get pushed out to the side
+function unstick(s, W) {
+  if (!s.alive || s.plant || s.deuce) return;
+  const p = solidAt(W, s.x, s.y + 0.3, s.z); if (!p || p === true) return;
+  toLocal(p, s.x, s.z);
+  const top = surfL(p, LZ);
+  if (s.mode === MODE.GRIND) { s.rail = null; s.railCd = 0.3; goAir(s); }
+  if (top - s.y < 2.2) { // pop up onto it
+    s.y = top + 0.02; if (s.vy < 0) s.vy = 0;
+    if (s.mode !== MODE.AIR && s.mode !== MODE.DOWN) { groundAt(W, s.x, s.z, s.y + 0.05); s.nx = NX; s.ny = NY; s.nz = NZ; s.onPrim = GP; }
+    return;
+  }
+  const hw = p.w / 2, hd = p.d / 2, m = [hw - LX, LX + hw, hd - LZ, LZ + hd]; let k = 0; for (let j = 1; j < 4; j++) if (m[j] < m[k]) k = j;
+  const ex = k === 0 ? 1 : k === 1 ? -1 : 0, ez = k === 2 ? 1 : k === 3 ? -1 : 0, push = m[k] + SK_R + 0.05;
+  s.x += (ex * p.c + ez * p.s) * push; s.z += (-ex * p.s + ez * p.c) * push;
+  const vn = s.vx * (ex * p.c + ez * p.s) + s.vz * (-ex * p.s + ez * p.c); if (vn < 0) { s.vx -= vn * (ex * p.c + ez * p.s); s.vz -= vn * (-ex * p.s + ez * p.c); }
+}
