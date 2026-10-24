@@ -9,11 +9,16 @@ const GAME = {
 const viewSeat = () => (GAME.spec >= 0 ? GAME.spec : GAME.me);
 const nameOf = (i) => { const p = GAME.players.find((x) => x.i === i); return p ? (i === GAME.me && GAME.mode !== 'attract' && GAME.mode !== 'replay' ? (GAME.myName || 'You') : p.name) : ROUND && ROUND.sk[i] ? ROUND.sk[i].name : '?'; };
 const ARENA_LIST = () => Object.values(ARENAS);
+// Re-rendering the screen that's already up (wallet/config updates, setting toggles) swaps the content in place
+// without replaying the pop-in animation — otherwise the menu flickers while the wallet boots.
+const screenKey = (html) => { const h = /<h2[^>]*>([\s\S]*?)<\/h2>/.exec(html); return (/<div class="card([^"]*)"/.exec(html) || [])[1] + '|' + (h ? h[1] : ''); };
 function showOverlay(html) {
   const ov = $('#ov');
-  if (!html) { ov.hidden = true; ov.innerHTML = ''; return; }
+  if (!html) { ov.hidden = true; ov.innerHTML = ''; ov.dataset.key = ''; return; }
   if (!ov.hidden && ov.innerHTML === html) return;
-  ov.hidden = false; ov.innerHTML = html;
+  const key = screenKey(html), same = !ov.hidden && ov.dataset.key === key;
+  ov.classList.toggle('still', same);
+  const y = ov.scrollTop; ov.hidden = false; ov.innerHTML = html; ov.dataset.key = key; if (same) ov.scrollTop = y;
 }
 
 // ───────────── screens
@@ -206,7 +211,11 @@ function perf(dt) {
   GFX.fpsAvg = GFX.fpsAvg * 0.97 + (1 / Math.max(dt, 1e-3)) * 0.03;
   const q = SETTINGS.quality;
   const want = q === 'low' ? 1 : q === 'high' ? Math.min(devicePixelRatio || 1, 2) : GFX.fpsAvg < 42 ? 0.75 : GFX.fpsAvg > 56 ? Math.min(devicePixelRatio || 1, 1.5) : null;
-  if (want && Math.abs(GFX.r.getPixelRatio() - want) > 0.05 && performance.now() - (perf.at || 0) > 3000) { perf.at = performance.now(); GFX.r.setPixelRatio(want); resize(); GFX.r.shadowMap.enabled = want >= 0.9; }
+  // auto quality: wait out the loading hitches (first 6 s), only change resolution every 5 s, and never toggle shadows
+  // on the fly (that recompiles every material — the start-up flicker)
+  if (!perf.t0) perf.t0 = performance.now();
+  if (q === 'auto' && performance.now() - perf.t0 < 6000) return;
+  if (want && Math.abs(GFX.r.getPixelRatio() - want) > 0.05 && performance.now() - (perf.at || 0) > 5000) { perf.at = performance.now(); GFX.r.setPixelRatio(want); resize(); }
 }
 // interpolation between ticks (+ own-skater prediction online)
 function viewFn() {

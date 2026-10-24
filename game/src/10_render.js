@@ -16,7 +16,7 @@ const TEX_OF = { concrete: 'concrete', wall: 'wall', stairs: 'stairs', wood: 'wo
 function initRender() {
   const T = THREE;
   const r = new T.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-  r.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+  r.setPixelRatio(Math.min(devicePixelRatio || 1, SETTINGS.quality === 'high' ? 2 : SETTINGS.quality === 'low' ? 1 : 1.5)); // start at the auto target: no resize on the first frame
   r.shadowMap.enabled = true; r.shadowMap.type = T.PCFSoftShadowMap;
   r.outputColorSpace = T.SRGBColorSpace;
   r.toneMapping = T.NoToneMapping;
