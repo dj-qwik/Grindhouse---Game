@@ -366,7 +366,7 @@ function addGraffiti(root, W) {
   const T = THREE, rnd = mulberry(W.half * 31 + W.prims.length);
   let n = 0;
   for (const p of W.prims) {
-    if (p.type !== 'box' || p.top - p.y0 < 1.6 || n > 22 || rnd() < 0.35 || p.mat === 'gate' || p.mat === 'glass' || p.mat === 'fence') continue;
+    if (p.type !== 'box' || p.top - p.y0 < 1.6 || n > 10 || rnd() < 0.6 || p.mat === 'gate' || p.mat === 'glass' || p.mat === 'fence') continue;
     const side = Math.floor(rnd() * 4), alongX = side < 2, len = alongX ? p.w : p.d;
     if (len < 2.2) continue;
     const s = Math.min(len * 0.8, (p.top - p.y0) * 1.2, 5);
@@ -394,6 +394,9 @@ function syncArena(R, t, dt) {
     if (p.top !== e.top || p.y0 !== e.y0 || p.w !== e.w || p.d !== e.d || p.h0 !== e.h0 || p.h1 !== e.h1) { e.m.geometry.dispose(); e.m.geometry = roundGeo(p); e.edges.geometry.dispose(); e.edges.geometry = hullGeo(e.m.geometry); e.top = p.top; e.y0 = p.y0; e.w = p.w; e.d = p.d; e.h0 = p.h0; e.h1 = p.h1; }
     e.m.position.x = p.cx; e.m.position.z = p.cz; e.m.rotation.y = p.yaw;
     const w = p.warn || 0;
+    // shutters / sweepers parked flush with the floor: hide them (they z-fight with it), except a lifted flash while telegraphing
+    const tucked = p.type === 'box' && (p.top - p.y0 < 0.03 || (p.mat === 'gate' && p.top <= 0.02));
+    e.m.visible = !tucked || w > 0; e.m.position.y = tucked ? 0.03 : 0;
     if (w > 0) {
       const on = Math.floor(GFX.clock * (6 + w * 6)) % 2 === 0;
       if (on) { e.m.material = WARN_MAT[p.mat] || (WARN_MAT[p.mat] = toon('#FF5C69', { emissive: new THREE.Color('#551018'), side: THREE.DoubleSide })); } else e.m.material = e.baseMat;

@@ -93,8 +93,8 @@ function placeGrime(root, R) {
         const [x, z] = toW(p, sx + (nz !== 0 ? u : 0) + nx * 0.025, sz + (nx !== 0 ? u : 0) + nz * 0.025);
         grimeWall(root, X.drip, x, p.top - dh / 2 - 0.02, z, dw, dh, yaw, 0.9);
       }
-      if (h >= 2.4 && len >= 2.5 && rnd() < 0.3) { // posters (1–3, overlapping, slightly crooked)
-        const n = Math.min(1 + Math.floor(rnd() * 3), Math.floor((len - 0.4) / 0.85)), u0 = (rnd() - 0.5) * Math.max(0, len - n * 0.85 - 0.4);
+      if (h >= 2.4 && len >= 2.5 && rnd() < 0.12) { // posters (1–2, overlapping, slightly crooked)
+        const n = Math.min(1 + Math.floor(rnd() * 2), Math.floor((len - 0.4) / 0.85)), u0 = (rnd() - 0.5) * Math.max(0, len - n * 0.85 - 0.4);
         for (let k = 0; k < n; k++) { const u = u0 + (k - (n - 1) / 2) * 0.82; if (Math.abs(u) + 0.45 > len / 2) continue; const [x, z] = toW(p, sx + (nz !== 0 ? u : 0) + nx * (0.03 + k * 0.004), sz + (nx !== 0 ? u : 0) + nz * (0.03 + k * 0.004)); grimeWall(root, X.posters[Math.floor(rnd() * 4)], x, Math.max(p.y0, 0) + 1.55 + (rnd() - 0.5) * 0.25, z, 0.8, 1.1, yaw, 1, (rnd() - 0.5) * 0.12); }
       }
       // base: weeds every so often, litter collecting against the wall
