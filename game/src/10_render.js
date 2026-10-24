@@ -81,7 +81,7 @@ function makeTex(kind) {
     case 'brick': base('#fff'); g.fillStyle = 'rgba(0,0,0,.28)'; for (let y = 0; y < S; y += 16) { g.fillRect(0, y, S, 3); for (let x = (y / 16) % 2 ? 16 : 0; x < S; x += 32) g.fillRect(x, y, 3, 16); } speck(500, '#000', 0.12); break;
     case 'asphalt': base('#fff'); speck(1400, '#000', 0.25, 0.5, 2); speck(500, '#fff', 0.35, 0.5, 1.5); break;
     case 'speckle': base('#fff'); speck(1200, '#000', 0.12, 0.5, 2.5); break;
-    case 'rust': base('#fff'); speck(400, '#000', 0.12); g.fillStyle = 'rgba(150,60,20,.45)'; for (let k = 0; k < 14; k++) { g.beginPath(); g.ellipse(R(0, S), R(0, S), R(4, 20), R(4, 20), 0, 0, 7); g.fill(); } break;
+    case 'rust': base('#fff'); speck(300, '#000', 0.06); for (let k = 0; k < 10; k++) { g.fillStyle = 'rgba(110,70,40,.12)'; g.fillRect(R(0, S), 0, R(2, 8), R(S * 0.3, S)); } break; // weathered paint (low-detail fallback)
     case 'tile': base('#fff'); g.strokeStyle = 'rgba(0,0,0,.22)'; g.lineWidth = 2; for (let k = 0; k <= S; k += 32) { g.beginPath(); g.moveTo(k, 0); g.lineTo(k, S); g.moveTo(0, k); g.lineTo(S, k); g.stroke(); } speck(300, '#000', 0.08); break;
     case 'belt': base('#fff'); g.fillStyle = 'rgba(0,0,0,.45)'; for (let y = 0; y < S; y += 16) g.fillRect(0, y, S, 6); g.fillStyle = '#FF9B36'; g.fillRect(0, 0, 6, S); g.fillRect(S - 6, 0, 6, S); break;
     case 'fence': g.clearRect(0, 0, S, S); g.strokeStyle = '#fff'; g.lineWidth = 3; for (let k = -S; k < S * 2; k += 16) { g.beginPath(); g.moveTo(k, 0); g.lineTo(k + S, S); g.moveTo(k + S, 0); g.lineTo(k, S); g.stroke(); } break;
