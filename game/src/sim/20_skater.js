@@ -101,7 +101,8 @@ function stepGround(s, W, dt, btn, mag, dX, dZ, ctl) {
   let fx = Math.sin(s.yaw), fz = Math.cos(s.yaw);
   // rolling backwards (back down a ramp): revert to face the way you're going
   if (sp > 1.2 && s.vx * fx + s.vz * fz < -0.25 * sp) { s.yaw = angWrap(s.yaw + PI); fx = -fx; fz = -fz; }
-  const braking = !!(btn & BTN.brake);
+  // back (brake key / stick pulled back) is also the ↓ direction: with trick held it means manual, not brake
+  const braking = !!(btn & BTN.brake) && !(btn & BTN.trick);
   let pushing = false;
   s.scrub = false; // set again below only while the stick points behind you at speed
   if (mag > 0.2) {
@@ -131,7 +132,7 @@ function stepGround(s, W, dt, btn, mag, dX, dZ, ctl) {
     const v = len3(s.vx, s.vy, s.vz); if (v > 1e-3 && v < MOVE.maxSpeed) { const k = Math.min(MOVE.maxSpeed, v + MOVE.pump * dt) / v; s.vx *= k; s.vy *= k; s.vz *= k; }
   }
   // manual: trick + back on the ground — balance, combo kept alive, speed retention
-  if ((btn & BTN.trick) && s.my < -0.5 && sp > 3 && s.manual < 2.5 && s.atk == null) s.manual += dt;
+  if ((btn & BTN.trick) && (s.my < -0.5 || (btn & BTN.brake)) && sp > 3 && s.manual < 2.5 && s.atk == null) s.manual += dt;
   else if (s.manual > 0) { if (s.manual >= 0.5) { s.pend += Math.floor(s.manual * 4); bank(s); } s.manual = 0; }
   // friction, drag, brake / powerslide
   sp = hyp(s.vx, s.vz);
@@ -197,7 +198,7 @@ function stepAir(s, W, dt, btn, press, mag, dX, dZ, ctl) {
   capSpeed(s);
   // tricks: trick + direction in the air. One at a time; land before it finishes and you bail.
   if ((press & BTN.trick) && !s.trick && s.airT > 0.05 && s.adren < 100) {
-    const L = s.mx < -0.35, Rt = s.mx > 0.35, U = s.my > 0.35, D = s.my < -0.35;
+    const L = s.mx < -0.35, Rt = s.mx > 0.35, U = s.my > 0.35, D = s.my < -0.35 || !!(btn & BTN.brake); // ↓ = back (brake key / stick pulled back)
     // handplant: no direction, near the top of vert air over a quarter pipe's coping
     if (!L && !Rt && !U && !D && (s.vertX || s.vertZ) && s.lipP && s.y > s.lipP.lipH - 0.3 && s.vy < 3.5 && hyp(s.x - s.lipX, s.z - s.lipZ) < 1.6) { startPlant(s); return; }
     if (U && !L && !Rt && grabEdge(s, W, 2.1, -1.4, 1.7)) return; // ↑ + trick near an edge: grind it

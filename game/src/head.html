@@ -193,6 +193,39 @@ body.freeride #hBar,body.freeride .hweap{display:none}
 #np small{font:700 10px/1 var(--mono,monospace);letter-spacing:1.5px;color:var(--dim)}#np b{font:18px/1.1 var(--display)}
 #np.on{animation:npIn 4.5s ease forwards}@keyframes npIn{0%{opacity:0;transform:translateX(30px)}8%{opacity:1;transform:none}85%{opacity:1;transform:none}100%{opacity:0;transform:translateX(30px)}}
 #ov.still .card{animation:none}
+
+/* ── How to play: paged manual, big type */
+.btn.howto{background:var(--orange);font:20px/1 var(--display);letter-spacing:.5px;padding:12px 20px}
+.manual{width:min(900px,100%);gap:14px;min-height:min(640px,calc(100vh - 40px));grid-template-rows:auto auto 1fr auto}
+.manual .mtop{display:flex;justify-content:space-between;align-items:center}
+.manual .mnum{font:700 16px/1 var(--body);color:var(--dim);letter-spacing:1px}
+.manual .mt{margin:0;font:clamp(38px,7vw,64px)/1 var(--display);color:var(--mc);text-shadow:3px 3px 0 var(--ink),6px 6px 0 #0007;letter-spacing:1px;transform:rotate(-1deg)}
+.manual .mt,.manual .mbody{animation:mslide .2s ease-out}
+@keyframes mslide{from{opacity:0;transform:translateX(18px)}to{opacity:1}}
+.manual .mbody{display:grid;gap:16px;align-content:start;font-size:clamp(20px,3.2vw,27px);line-height:1.35;color:var(--text)}
+.manual .mbody p{margin:0}
+.manual .mbody .lead{font-size:clamp(23px,3.8vw,32px);font-weight:800;color:var(--cream)}
+.manual .mbody .note{font-size:clamp(16px,2.4vw,20px);color:var(--dim)}
+.manual .mbody b{color:var(--cream)}.manual .mbody .ad{color:var(--orange)}
+.manual kbd{font:800 .8em/1 var(--body);background:var(--cream);color:var(--ink);border-radius:6px;padding:.18em .45em;box-shadow:0 3px 0 #000a;white-space:nowrap;display:inline-block}
+.manual .mrow{display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:18px;align-items:center}
+.manual .mrow .mk{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.manual .mrow .big{font:44px/1 var(--display);color:var(--orange)}
+.manual .tpad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:620px}
+.manual .tc{background:var(--ink);border:3px solid var(--line);border-radius:10px;padding:10px;display:grid;justify-items:center;gap:4px;text-align:center}
+.manual .tc b{font:34px/1 var(--display);color:var(--lime)}
+.manual .tc span{font-size:clamp(15px,2.3vw,20px);font-weight:700}
+.manual .tc.big{border-color:var(--orange)}.manual .tc.big b{color:var(--orange)}
+.manual .tc.mid{background:transparent;border-style:dashed}.manual .tc.mid span{color:var(--dim)}
+.manual .wgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px 22px;font-size:clamp(16px,2.4vw,21px)}
+.manual .wgrid h4{margin:0 0 4px;font:22px/1 var(--display);color:var(--coral)}
+.manual .rank{margin:0;padding-left:1.3em;font-weight:800;color:var(--cream)}
+.manual .mnav{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.manual .mbig{font:26px/1 var(--display);min-width:84px;padding:12px 18px}
+.manual .mdots{display:flex;flex-wrap:wrap;gap:7px;justify-content:center}
+.manual .mdot{width:13px;height:13px;border-radius:50%;border:2px solid var(--line);background:transparent;padding:0;cursor:pointer}
+.manual .mdot.on{background:var(--lime);border-color:var(--lime)}
+@media (max-width:560px){.manual{min-height:0}.manual .mrow{grid-template-columns:1fr;gap:6px}.manual .wgrid{grid-template-columns:1fr}.manual .mbig{min-width:64px;font-size:22px}.manual .mdots{gap:5px}.manual .mdot{width:10px;height:10px}}
 </style>
 </head>
 <body>

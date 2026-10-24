@@ -11,7 +11,7 @@ const nameOf = (i) => { const p = GAME.players.find((x) => x.i === i); return p 
 const ARENA_LIST = () => Object.values(ARENAS);
 // Re-rendering the screen that's already up (wallet/config updates, setting toggles) swaps the content in place
 // without replaying the pop-in animation — otherwise the menu flickers while the wallet boots.
-const screenKey = (html) => { const h = /<h2[^>]*>([\s\S]*?)<\/h2>/.exec(html); return (/<div class="card([^"]*)"/.exec(html) || [])[1] + '|' + (h ? h[1] : ''); };
+const screenKey = (html) => { if (html.includes('class="card manual"')) return 'manual'; const h = /<h2[^>]*>([\s\S]*?)<\/h2>/.exec(html); return (/<div class="card([^"]*)"/.exec(html) || [])[1] + '|' + (h ? h[1] : ''); };
 function showOverlay(html) {
   const ov = $('#ov');
   if (!html) { ov.hidden = true; ov.innerHTML = ''; ov.dataset.key = ''; return; }
@@ -40,7 +40,7 @@ function homeCard() {
       <button class="mode practice" id="goPractice"><span class="k">PRACTICE</span><span class="d">You vs bots on any arena. Learn the lines, test the weapons.</span></button>
     </div>
     <div class="facts"><span>8 arenas</span><span>16 weapons</span><span>8 skaters</span><span>60 s hard cap</span><span>Server-decided winner</span><span>90 / 10 payout</span></div>
-    <div class="row"><button class="btn ghost small" id="howto">How to play</button><button class="btn ghost small" id="openSettings">Controls &amp; settings</button>${cashLive ? `<button class="btn ghost small" id="cashWallet">Wallet</button>` : ''}</div>
+    <div class="row"><button class="btn howto" id="howto">📖 HOW TO PLAY</button><button class="btn ghost small" id="openSettings">Controls &amp; settings</button>${cashLive ? `<button class="btn ghost small" id="cashWallet">Wallet</button>` : ''}</div>
   </div>`;
 }
 function skaterPicker() {
@@ -63,34 +63,99 @@ function practiceCard() {
     <div class="row"><button class="btn primary big" id="practiceGo">Drop in</button><button class="btn ghost" id="back">Back</button></div>
   </div>`;
 }
-function howtoCard() {
-  const k = (a) => `<kbd>${esc(keyLabel(KEYMAP[a]))}</kbd>`;
-  return `<div class="card">
-    <h2>How to play</h2>
-    <div class="cols">
-      <div style="display:grid;gap:10px;align-content:start">
-        <h3>The match</h3>
-        <ul class="fine" style="font-size:14px;color:var(--text)">
-          <li>Everyone spawns with a Scrap Pistol, a Splinter Bat and one Shove. Roll over glowing pedestals to grab better guns and gear (waves at 3, 17, 33 and 44 s).</li>
-          <li>One life. The safe zone squeezes from 12 s; outside it you take escalating damage. From 50 s only the final core is safe and lethal pulses speed up.</li>
-          <li>Last skater standing wins. At exactly 60 s the server ranks survivors by <b>health</b>, then <b>eliminations</b>, then <b>damage dealt</b>, then a <b>seeded tiebreak order</b> fixed before the match. If everyone left goes down on the same tick, the same ranking uses health from just before that tick.</li>
-          <li>Tricks don't score points: clean landings fill your <b>Adrenaline</b>. Trick + ←→↑↓ are quick flips; trick + a diagonal are the big ones (360 Flip, Laser Flip, Hardflip, 540 McTwist) that need a charged launch off a ramp. Trick with no direction at the top of a quarter pipe is a Handplant. Grinding is never automatic: hold ↑ + trick near any rail, ledge, ramp side or box edge (on the ground or in the air) and you snap onto it — grinds carry round box corners. ↓ + trick in the air handplants on an edge. Ride or fly at a wall and hit trick to kick off it for extra air, then chain a trick. Chain moves in one combo for up to ×2. At 50 your next melee hit lands harder; at 100 unleash a Super Slam. Repeating the same trick pays less each time.</li>
-        </ul>
-      </div>
-      <div style="display:grid;gap:10px;align-content:start">
-        <h3>Controls</h3>
-        <div class="keys">
-          <kbd>${esc(keyLabel(KEYMAP.fwd) + keyLabel(KEYMAP.left) + keyLabel(KEYMAP.brake) + keyLabel(KEYMAP.right))}</kbd><span>Push · steer · ${esc(keyLabel(KEYMAP.brake))} brakes</span>${k('jump')}<span>Ollie (hold up a ramp, release at the lip for a big launch)</span>
-          ${k('attack')}<span>Attack: locks onto whoever's in front</span>${k('trick')}<span>Trick in the air · Super Slam when Adrenaline is full</span>
-          ${k('throw')}<span>Throw / shove</span><kbd>Mouse</kbd><span>Look and steer</span>
-        </div>
-        <p class="fine" style="padding:0">Controller: left stick steer (pull back to brake), right stick look, A ollie, RT attack, X trick / slam, B throw.</p>
-        <p class="fine" style="padding:0">Weapons are picked up automatically when you roll over an upgrade. Attack uses your gun, or your melee weapon when someone's close. Hold a direction while you trick for different flips (diagonals = big tricks). Hold ↑ + trick near anything with an edge to grind it; hit tall walls in the air to wallride or kick off them.</p>
-      </div>
+// ── How to play: a paged manual. Few words per page, big type; ◀ ▶ (or the arrow keys) to flip.
+const MAN = { page: 0 };
+function manualPages() {
+  const K = (a) => `<kbd>${esc(keyLabel(KEYMAP[a]))}</kbd>`, U = `${K('fwd')}`, D = `${K('brake')}`, T = K('trick');
+  const row = (keys, text) => `<div class="mrow"><span class="mk">${keys}</span><span>${text}</span></div>`;
+  const pad = (cells) => `<div class="tpad">${cells.map(([a, n, big]) => `<div class="tc${big ? ' big' : ''}${a === '' ? ' mid' : ''}"><b>${a}</b><span>${n}</span></div>`).join('')}</div>`;
+  return [
+    ['SKATE OR DIE', 'lime', `<p class="lead">2–8 skaters. One life. Sixty seconds.</p>
+      <p><b>Last one rolling wins.</b></p>
+      <p>Grab weapons, land tricks to charge your <b class="ad">Adrenaline</b>, and stay inside the shrinking safe zone.</p>`],
+    ['KEYBOARD &amp; MOUSE', 'cyan', `${row(`${K('fwd')} ${K('left')} ${K('brake')} ${K('right')}`, 'Push · steer · brake')}
+      ${row('<kbd>Mouse</kbd>', 'Look around')}
+      ${row(K('jump'), 'Ollie (hold to pop higher)')}
+      ${row(T, 'Tricks · grinds · Super Slam')}
+      ${row(K('attack'), 'Attack')}
+      ${row(K('throw'), 'Throw / shove')}
+      ${row(K('boost'), 'Boost push')}
+      <p class="note">Change any key in Controls &amp; settings.</p>`],
+    ['CONTROLLER', 'cyan', `${row('<kbd>L stick</kbd>', 'Steer · pull back to brake')}
+      ${row('<kbd>R stick</kbd>', 'Look around')}
+      ${row('<kbd>A</kbd>', 'Ollie')}
+      ${row('<kbd>X</kbd>', 'Tricks · grinds · Super Slam')}
+      ${row('<kbd>RT</kbd> <kbd>RB</kbd>', 'Attack')}
+      ${row('<kbd>B</kbd>', 'Throw / shove')}
+      ${row('<kbd>LB</kbd>', 'Boost push')}
+      <p class="note">On a controller, ↑ is the stick forward and ↓ is the stick pulled back.</p>`],
+    ['ROLLING', 'lime', `${row(U, '<b>Push</b> to pick up speed')}
+      ${row(D, '<b>Brake</b> and turn tighter')}
+      ${row(K('boost'), '<b>Boost push</b>: faster, but you take more damage while you do it')}
+      ${row(K('jump'), '<b>Ollie</b>. Hold it longer to pop higher')}`],
+    ['BIG AIR', 'orange', `<p class="lead">Hold ${K('jump')} as you ride up a ramp and let go at the lip.</p>
+      <p>That's a <b>charged launch</b>, the way to get huge air.</p>
+      <p>Every arena has a <b>halfpipe</b>. Keep pushing as you drop down its walls to <b>pump</b> for more speed and higher airs.</p>`],
+    ['FLIP TRICKS', 'orange', `<p class="lead">In the air, press ${T} + a direction.</p>
+      ${pad([['↖', '360 Flip', 1], ['↑', '360 Shuvit'], ['↗', 'Laser Flip', 1], ['←', 'Kickflip'], ['', 'trick'], ['→', 'Heelflip'], ['↙', 'Hardflip', 1], ['↓', 'Shuvit'], ['↘', '540 McTwist', 1]])}
+      <p class="note">↑ ${U} · ↓ ${D} · ← ${K('left')} · → ${K('right')}</p>`],
+    ['BIG TRICKS', 'orange', `<p class="lead">The <b>diagonals</b> are the big ones.</p>
+      <p>They take longer to spin, so they need big air: a charged launch or the halfpipe.</p>
+      <p><b>Let the trick finish before you land</b>, or you bail and lose the combo.</p>`],
+    ['GRINDS', 'cyan', `<p class="lead">Hold ${U} + ${T} near anything with an edge.</p>
+      <p>Rails, ledges, ramp sides, box tops. On the ground or in the air, you <b>snap on</b>.</p>
+      <p>Grinds carry you round corners. Press ${K('jump')} to pop off.</p>
+      <p class="note">Grinding never happens by itself. You have to ask for it.</p>`],
+    ['HANDPLANTS', 'cyan', `${row(`${D} + ${T}`, 'in the air near an edge: plant a hand on it')}
+      ${row(T, 'with no direction at the top of a quarter pipe or halfpipe: handplant on the coping')}
+      <p class="note">Big points, and they look great.</p>`],
+    ['MANUALS', 'cyan', `<p class="lead">On the ground, hold ${D} + ${T} while you're rolling.</p>
+      <p>You balance on two wheels. It <b>keeps your combo alive</b> between tricks, and you hold your speed.</p>`],
+    ['WALLS', 'lime', `${row('<b>Wallride</b>', 'Jump into a tall wall while moving along it')}
+      ${row(`<b>Wall kick</b>`, `Press ${T} as you fly into a wall: you kick off it for extra air`)}
+      <p>Then throw a trick straight after. It all counts.</p>`],
+    ['COMBOS', 'violet', `<p class="lead">String moves together before you land.</p>
+      <p>Grind → pop → flip → wall kick → land.</p>
+      <p>More moves in a row = <b>bigger multiplier</b>, up to <b>×2</b>.</p>
+      <p>The same trick over and over is worth less each time. <b>Mix it up.</b></p>`],
+    ['ADRENALINE', 'orange', `<p class="lead">Landed tricks and combos fill your <b class="ad">Adrenaline</b> bar.</p>
+      ${row('<span class="big">½</span>', '<b>Half full</b>: your next melee hit lands extra hard')}
+      ${row('<span class="big">⚡</span>', `<b>Full</b>: press ${T} for a <b class="ad">SUPER SLAM</b>. It blasts everyone close around you`)}`],
+    ['FIGHTING', 'coral', `${row(K('attack'), '<b>Attack</b> whoever is in front of you')}
+      <p>You use your <b>gun</b> at range and your <b>melee weapon</b> up close. It picks for you.</p>
+      ${row(K('throw'), '<b>Throw</b> a grenade, bomb or molotov, or <b>shove</b> if you have none')}
+      <p class="note">You start with a Scrap Pistol, a Splinter Bat and a Shove.</p>`],
+    ['WEAPONS', 'coral', `<p class="lead"><b>Roll over glowing pedestals</b> to grab better gear.</p>
+      <p>New drops land at <b>3, 17, 33 and 44 seconds</b>.</p>
+      <div class="wgrid"><div><h4>Melee</h4>Steel Pipe · Katana · Cleaver · Chain Whip · Shock Baton · Wrecking Hammer</div>
+      <div><h4>Guns</h4>Nailgun · Sawed-Off · Paintball SMG · Scrap Revolver</div>
+      <div><h4>Specials</h4>Rocket Skate · Buzzsaw Launcher</div>
+      <div><h4>Throw</h4>Grenade · Pipe Bomb · Molotov</div></div>`],
+    ['THE SQUEEZE', 'coral', `<p class="lead">From <b>12 seconds</b> the safe zone starts shrinking.</p>
+      <p>Outside it you take damage, and it gets worse the longer you stay.</p>
+      <p>From <b>50 seconds</b> only the final core is safe. Every arena also has its own hazards and finale. Watch for the warnings.</p>`],
+    ['WHO WINS', 'lime', `<p class="lead">Last skater standing.</p>
+      <p>If more than one is left at <b>60 seconds</b>, the winner is decided by:</p>
+      <ol class="rank"><li>most health</li><li>most eliminations</li><li>most damage dealt</li></ol>`],
+    ['PRACTICE', 'violet', `${row('<b>Deathmatch</b>', 'You against bots on any arena')}
+      ${row('<b>Free ride</b>', 'No timer, no fighting. The bots just skate. Learn the lines, find the halfpipe, and nail your combos')}
+      <p class="note">Super Slam works in free ride too.</p>`],
+  ];
+}
+function manualCard() {
+  const P = manualPages(), n = P.length, i = MAN.page = Math.max(0, Math.min(n - 1, MAN.page)), [title, col, body] = P[i];
+  return `<div class="card manual" data-col="${col}">
+    <div class="mtop"><span class="mnum">${i + 1} / ${n}</span><button class="btn ghost small" id="manClose" aria-label="Close">✕</button></div>
+    <h2 class="mt" style="--mc:var(--${col})">${title}</h2>
+    <div class="mbody">${body}</div>
+    <div class="mnav">
+      <button class="btn mbig" id="manPrev" ${i ? '' : 'disabled'} aria-label="Previous page">◀</button>
+      <div class="mdots">${P.map((_, k) => `<button class="mdot${k === i ? ' on' : ''}" data-manpage="${k}" aria-label="Page ${k + 1}"></button>`).join('')}</div>
+      ${i < n - 1 ? '<button class="btn primary mbig" id="manNext" aria-label="Next page">▶</button>' : '<button class="btn primary mbig" id="manClose2">GOT IT</button>'}
     </div>
-    <div class="row"><button class="btn primary" id="back">Got it</button></div>
   </div>`;
 }
+function openManual(page = 0) { MAN.page = page; GAME.screen = 'howto'; showOverlay(manualCard()); }
 function settingsCard() {
   return `<div class="card">
     <h2>Controls &amp; settings</h2>
@@ -405,7 +470,11 @@ $('#ov').addEventListener('click', (e) => {
   else if (t.id === 'practiceGo') startPractice();
   else if (t.id === 'rematch') startPractice();
   else if (t.id === 'watchReplay') startReplay();
-  else if (t.id === 'howto') { GAME.screen = 'howto'; showOverlay(howtoCard()); }
+  else if (t.id === 'howto') openManual(0);
+  else if (t.id === 'manNext') { MAN.page++; showOverlay(manualCard()); }
+  else if (t.id === 'manPrev') { MAN.page--; showOverlay(manualCard()); }
+  else if (t.dataset.manpage) { MAN.page = +t.dataset.manpage; showOverlay(manualCard()); }
+  else if (t.id === 'manClose' || t.id === 'manClose2') goHome();
   else if (t.id === 'openSettings') openSettings();
   else if (t.id === 'settingsDone') { if (settingsBack === 'home') goHome(); else { GAME.screen = settingsBack; showOverlay(''); } }
   else if (t.dataset.rebind) { startRebind(t.dataset.rebind); showOverlay(settingsCard()); }
@@ -430,6 +499,13 @@ $('#hud').addEventListener('click', (e) => {
 });
 $('#stage').addEventListener('click', () => { if (GAME.screen === 'match' && INPUT.enabled && !INPUT.locked) requestLock(); });
 addEventListener('keydown', (e) => {
+  if (GAME.screen === 'howto') { // manual: arrows flip pages, Esc closes
+    const n = manualPages().length;
+    if ((e.code === 'ArrowRight' || e.code === 'PageDown') && MAN.page < n - 1) { MAN.page++; showOverlay(manualCard()); playSfx('ui'); }
+    else if ((e.code === 'ArrowLeft' || e.code === 'PageUp') && MAN.page > 0) { MAN.page--; showOverlay(manualCard()); playSfx('ui'); }
+    else if (e.code === 'Escape') goHome();
+    return;
+  }
   if (e.code === 'Escape' && GAME.screen === 'match' && GAME.mode === 'practice' && GAME.phase === 'play') { /* pointer lock releases by itself; show the leave option */ hudExtra(lockHint() + '<div class="spec" style="bottom:50%"><span>Paused input</span><button class="btn small hot" id="quitMatch">' + (ROUND && ROUND.free ? 'Leave free ride' : 'Leave practice') + '</button></div>'); }
   if (GAME.spec >= 0 && (e.code === 'ArrowRight' || e.code === 'KeyD')) cycleSpec(1);
   if (GAME.spec >= 0 && (e.code === 'ArrowLeft' || e.code === 'KeyA')) cycleSpec(-1);
